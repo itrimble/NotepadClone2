@@ -1,7 +1,10 @@
 import SwiftUI
 import AppKit
 
-class Document: ObservableObject {
+class Document: ObservableObject, Identifiable {
+    // MARK: - Identifiable
+    let id = UUID() // Add unique identifier for each document
+    
     @Published var text = "" {
         didSet {
             if oldValue != text && !isUpdatingFromAttributed {
@@ -159,24 +162,11 @@ class Document: ObservableObject {
         guard let highlighter = self.highlighter else { return }
         
         DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let highlighted = highlighter.highlight(self.text)
-                DispatchQueue.main.async {
-                    // Syntax highlighting updates don't need to be part of undo stack
-                    // as they're automatically reapplied when text changes
-                    self.attributedText = highlighted
-                }
-            } catch {
-                // Fallback to plain text if highlighting fails
-                print("Syntax highlighting error: \(error)")
-                let defaultAttributes: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular),
-                    .foregroundColor: NSColor.labelColor
-                ]
-                let fallback = NSAttributedString(string: self.text, attributes: defaultAttributes)
-                DispatchQueue.main.async {
-                    self.attributedText = fallback
-                }
+            let highlighted = highlighter.highlight(self.text)
+            DispatchQueue.main.async {
+                // Syntax highlighting updates don't need to be part of undo stack
+                // as they're automatically reapplied when text changes
+                self.attributedText = highlighted
             }
         }
     }

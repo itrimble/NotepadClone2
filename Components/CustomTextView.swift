@@ -4,6 +4,7 @@ import AppKit
 struct CustomTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var attributedText: NSAttributedString
+    @Environment(\.colorScheme) var colorScheme
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -18,26 +19,23 @@ struct CustomTextView: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.textContainerInset = NSSize(width: 10, height: 10)
         
-        // Set default text attributes
-        let defaultAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 14),
-            .foregroundColor: NSColor.labelColor  // Use dynamic color for light/dark mode
-        ]
-        textView.typingAttributes = defaultAttributes
-        
-        // Set background color
-        textView.backgroundColor = NSColor.textBackgroundColor
+        // Set up initial theme
+        context.coordinator.updateTheme(textView)
         
         // Set up the text view with initial content
         if attributedText.length > 0 {
-            // Ensure proper text color on initial load
-            let mutableString = NSMutableAttributedString(attributedString: attributedText)
-            let range = NSRange(location: 0, length: mutableString.length)
-            mutableString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
-            textView.textStorage?.setAttributedString(mutableString)
+            textView.textStorage?.setAttributedString(attributedText)
         } else {
-            // Set empty string with default attributes
+            let defaultAttributes = context.coordinator.defaultAttributes()
             textView.textStorage?.setAttributedString(NSAttributedString(string: "", attributes: defaultAttributes))
+        }
+        
+        // Ensure text view becomes first responder at the right time
+        DispatchQueue.main.async {
+            // Only try to make first responder if the window exists and is visible
+            if let window = textView.window, window.isVisible {
+                window.makeFirstResponder(textView)
+            }
         }
         
         return scrollView
@@ -46,39 +44,58 @@ struct CustomTextView: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         let textView = nsView.documentView as! NSTextView
         
-        // Update background color for theme changes
-        textView.backgroundColor = NSColor.textBackgroundColor
+        // Always update theme when view updates
+        context.coordinator.updateTheme(textView)
         
-        // Only update if the attributed text has actually changed
-        if textView.textStorage?.isEqual(to: attributedText) == false {
+        // Only update text if it has actually changed
+        if let textStorage = textView.textStorage,
+           textStorage.length != attributedText.length ||
+           textStorage.string != attributedText.string {
+            
             // Store the current selection
             let selectedRange = textView.selectedRange()
             
-            // Create a mutable copy and ensure proper text color
-            let mutableString = NSMutableAttributedString(attributedString: attributedText)
-            let fullRange = NSRange(location: 0, length: mutableString.length)
-            
-            // Safely apply default text color to any text that doesn't have a color
-            mutableString.enumerateAttribute(.foregroundColor, in: fullRange) { (value, range, _) in
-                if value == nil {
-                    // Validate range before applying attribute
-                    let safeRange = NSIntersectionRange(range, fullRange)
-                    if safeRange.length > 0 {
-                        mutableString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: safeRange)
-                    }
-                }
-            }
-            
             // Update text storage
-            textView.textStorage?.setAttributedString(mutableString)
+            textStorage.beginEditing()
+            textStorage.setAttributedString(attributedText)
+            textStorage.endEditing()
             
-            // Restore the selection if the text length allows
-            if selectedRange.location >= 0 && selectedRange.location <= textView.string.count {
-                let maxLength = textView.string.count
+            // Restore selection safely
+            let maxLength = textStorage.length
+            if selectedRange.location >= 0 && selectedRange.location <= maxLength {
                 let validLength = min(selectedRange.length, maxLength - selectedRange.location)
                 let safeRange = NSRange(location: selectedRange.location, length: max(0, validLength))
                 textView.setSelectedRange(safeRange)
             }
+        }
+        
+        // CRITICAL FIX: Safe responder management
+        if let window = textView.window,
+           window.isVisible,
+           window.isKeyWindow,
+           !context.coordinator.isBeingRemoved {
+            
+            // Only make first responder after a delay to avoid conflicts
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                if let stillValidWindow = textView.window,
+                   stillValidWindow.isVisible && stillValidWindow.isKeyWindow,
+                   stillValidWindow.firstResponder != textView {
+                    stillValidWindow.makeFirstResponder(textView)
+                }
+            }
+        }
+    }
+    
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        // CRITICAL FIX: Simplify responder handling
+        coordinator.isBeingRemoved = true
+        
+        // Clean up delegate
+        if let textView = nsView.documentView as? NSTextView {
+            textView.delegate = nil
+            
+            // Let AppKit handle responder transitions naturally
+            // DO NOT call resignFirstResponder() directly
         }
     }
     
@@ -88,48 +105,80 @@ struct CustomTextView: NSViewRepresentable {
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CustomTextView
+        private var isUpdating = false
+        private var lastText = ""
+        var isBeingRemoved = false // Track if view is being dismantled
         
         init(_ parent: CustomTextView) {
             self.parent = parent
+            super.init()
+        }
+        
+        func defaultAttributes() -> [NSAttributedString.Key: Any] {
+            return [
+                .font: NSFont.systemFont(ofSize: 14),
+                .foregroundColor: NSColor.labelColor
+            ]
+        }
+        
+        func updateTheme(_ textView: NSTextView) {
+            // Update background color
+            textView.backgroundColor = NSColor.textBackgroundColor
+            
+            // Update typing attributes
+            var attrs = textView.typingAttributes
+            attrs[.foregroundColor] = NSColor.labelColor
+            attrs[.backgroundColor] = NSColor.textBackgroundColor
+            textView.typingAttributes = attrs
+            
+            // Update existing text colors if needed
+            textView.textStorage?.addAttribute(.foregroundColor,
+                                               value: NSColor.labelColor,
+                                               range: NSRange(location: 0, length: textView.textStorage?.length ?? 0))
         }
         
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
+            guard let textView = notification.object as? NSTextView,
+                  !isUpdating,
+                  !isBeingRemoved else { return }
             
-            // Update on the main thread to prevent potential race conditions
-            DispatchQueue.main.async {
-                // Ensure proper text color for new text
-                let mutableString = NSMutableAttributedString(attributedString: textView.attributedString())
-                let range = NSRange(location: 0, length: mutableString.length)
+            // Use a flag with auto-reset to prevent circular updates
+            isUpdating = true
+            
+            // Schedule the flag reset for next run loop iteration
+            DispatchQueue.main.async { [weak self] in
+                self?.isUpdating = false
+            }
+            
+            let currentText = textView.string
+            
+            // Only update if text actually changed
+            if currentText != lastText {
+                lastText = currentText
                 
-                // Apply default text color to any text that doesn't have a color
-                mutableString.enumerateAttribute(.foregroundColor, in: range) { (value, range, _) in
-                    if value == nil {
-                        mutableString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
+                // Critical: Update text binding immediately but only once
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    
+                    // Only update if still different
+                    if self.parent.text != currentText {
+                        self.parent.text = currentText
+                    }
+                    
+                    // Update attributed text
+                    if let textStorage = textView.textStorage {
+                        let attributedString = textStorage.copy() as! NSAttributedString
+                        if !attributedString.isEqual(to: self.parent.attributedText) {
+                            self.parent.attributedText = attributedString
+                        }
                     }
                 }
-                
-                self.parent.attributedText = mutableString
-                self.parent.text = textView.string
             }
         }
         
-        // Handle font changes from the font panel
         func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
-            return true
-        }
-        
-        // Ensure proper typing attributes
-        func textView(_ textView: NSTextView, willChangeSelectionFrom oldSelectedCharRange: NSRange, to newSelectedCharRange: NSRange) -> NSRange {
-            // Maintain proper typing attributes including text color
-            if let attrs = textView.typingAttributes[.foregroundColor] {
-                if attrs as! NSColor != NSColor.labelColor {
-                    var newAttrs = textView.typingAttributes
-                    newAttrs[.foregroundColor] = NSColor.labelColor
-                    textView.typingAttributes = newAttrs
-                }
-            }
-            return newSelectedCharRange
+            // Prevent changes during updates or when being removed
+            return !isUpdating && !isBeingRemoved
         }
     }
 }

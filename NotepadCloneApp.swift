@@ -12,108 +12,276 @@ struct NotepadCloneApp: App {
         .commands {
             // File Menu
             CommandGroup(replacing: .newItem) {
-                Button("New Tab") { appState.newDocument() }
-                    .keyboardShortcut("t")
-                Button("Open...") { appState.openDocument() }
-                    .keyboardShortcut("o")
-                Button("Save") { appState.saveDocument() }
-                    .keyboardShortcut("s")
-                Button("Save As...") { appState.saveDocumentAs() }
-                    .keyboardShortcut("S")
-                Divider()
-                Button("Close Tab") {
-                    if let currentTab = appState.currentTab {
-                        appState.closeDocument(at: currentTab)
+                Button(action: {
+                    DispatchQueue.main.async {
+                        appState.newDocument()
                     }
+                }) {
+                    Label("New Tab", systemImage: "plus")
+                }
+                .keyboardShortcut("t", modifiers: [.command])
+                
+                Button(action: {
+                    DispatchQueue.main.async {
+                        appState.openDocument()
+                    }
+                }) {
+                    Label("Open...", systemImage: "folder.badge.plus")
+                }
+                .keyboardShortcut("o")
+                
+                Button(action: { appState.saveDocument() }) {
+                    Label("Save", systemImage: "doc.badge.plus")
+                }
+                .keyboardShortcut("s")
+                
+                Button(action: { appState.saveDocumentAs() }) {
+                    Label("Save As...", systemImage: "square.and.arrow.down")
+                }
+                .keyboardShortcut("S")
+                
+                Divider()
+                
+                Button(action: {
+                    if let currentTab = appState.currentTab {
+                        DispatchQueue.main.async {
+                            appState.closeDocument(at: currentTab)
+                        }
+                    }
+                }) {
+                    Label("Close Tab", systemImage: "xmark")
                 }
                 .keyboardShortcut("w")
+                
                 Divider()
-                Button("Print...") { appState.printDocument() }
-                    .keyboardShortcut("p")
+                
+                Button(action: { appState.printDocument() }) {
+                    Label("Print...", systemImage: "printer")
+                }
+                .keyboardShortcut("p")
             }
             
             // Edit Menu
             CommandGroup(replacing: .textEditing) {
-                Button("Undo") { appState.undo() }
-                    .keyboardShortcut("z")
-                Button("Redo") { appState.redo() }
-                    .keyboardShortcut("Z")
+                Button(action: { appState.undo() }) {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .keyboardShortcut("z")
+                
+                Button(action: { appState.redo() }) {
+                    Label("Redo", systemImage: "arrow.uturn.forward")
+                }
+                .keyboardShortcut("Z")
+                
                 Divider()
-                Button("Cut") { appState.cut() }
-                    .keyboardShortcut("x")
-                Button("Copy") { appState.copy() }
-                    .keyboardShortcut("c")
-                Button("Paste") { appState.paste() }
-                    .keyboardShortcut("v")
-                Button("Select All") { appState.selectAll() }
-                    .keyboardShortcut("a")
+                
+                Button(action: { appState.cut() }) {
+                    Label("Cut", systemImage: "scissors")
+                }
+                .keyboardShortcut("x")
+                
+                Button(action: { appState.copy() }) {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .keyboardShortcut("c")
+                
+                Button(action: { appState.paste() }) {
+                    Label("Paste", systemImage: "doc.on.clipboard")
+                }
+                .keyboardShortcut("v")
+                
+                Button(action: { appState.selectAll() }) {
+                    Label("Select All", systemImage: "checkmark.rectangle")
+                }
+                .keyboardShortcut("a")
+                
                 Divider()
-                Button("Find") { appState.showFindPanel() }
-                    .keyboardShortcut("f")
-                Button("Replace") { appState.showReplacePanel() }
-                    .keyboardShortcut("f", modifiers: [.command, .option])
-                Button("Find Next") { appState.findNext() }
-                    .keyboardShortcut("g")
-                Button("Find Previous") { appState.findPrevious() }
-                    .keyboardShortcut("G")
+                
+                Button(action: { appState.delete() }) {
+                    Label("Delete", systemImage: "delete.left")
+                }
+                .keyboardShortcut(.delete)
+            }
+            
+            // Search Menu
+            CommandMenu("Search") {
+                Button(action: { appState.showFindPanel() }) {
+                    Label("Find", systemImage: "magnifyingglass")
+                }
+                .keyboardShortcut("f")
+                
+                Button(action: { appState.showReplacePanel() }) {
+                    Label("Find and Replace", systemImage: "arrow.left.arrow.right")
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                
+                Button(action: { appState.findNext() }) {
+                    Label("Find Next", systemImage: "arrow.down.circle")
+                }
+                .keyboardShortcut("g")
+                
+                Button(action: { appState.findPrevious() }) {
+                    Label("Find Previous", systemImage: "arrow.up.circle")
+                }
+                .keyboardShortcut("G")
+                
+                Divider()
+                
+                Button(action: { appState.showJumpToLinePanel() }) {
+                    Label("Jump to Line", systemImage: "arrow.right.to.line")
+                }
+                .keyboardShortcut("l")
             }
             
             // Format Menu
             CommandMenu("Format") {
-                Button("Bold") { appState.toggleBold() }
-                    .keyboardShortcut("b")
-                Button("Italic") { appState.toggleItalic() }
-                    .keyboardShortcut("i")
-                Button("Underline") { appState.toggleUnderline() }
-                    .keyboardShortcut("u")
+                Button(action: { appState.toggleBold() }) {
+                    Label("Bold", systemImage: "bold")
+                }
+                .keyboardShortcut("b")
+                
+                Button(action: { appState.toggleItalic() }) {
+                    Label("Italic", systemImage: "italic")
+                }
+                .keyboardShortcut("i")
+                
+                Button(action: { appState.toggleUnderline() }) {
+                    Label("Underline", systemImage: "underline")
+                }
+                .keyboardShortcut("u")
+                
                 Divider()
-                Button("Align Left") { appState.alignLeft() }
-                    .keyboardShortcut("{")
-                Button("Center") { appState.alignCenter() }
-                    .keyboardShortcut("|")
-                Button("Align Right") { appState.alignRight() }
-                    .keyboardShortcut("}")
+                
+                Button(action: { appState.alignLeft() }) {
+                    Label("Align Left", systemImage: "text.alignleft")
+                }
+                .keyboardShortcut("{")
+                
+                Button(action: { appState.alignCenter() }) {
+                    Label("Center", systemImage: "text.aligncenter")
+                }
+                .keyboardShortcut("|")
+                
+                Button(action: { appState.alignRight() }) {
+                    Label("Align Right", systemImage: "text.alignright")
+                }
+                .keyboardShortcut("}")
+                
                 Divider()
-                Button("Font...") { appState.showFontPanel() }
-                    .keyboardShortcut("t")
+                
+                Button(action: { appState.showFontPanel() }) {
+                    Label("Font...", systemImage: "textformat")
+                }
+                .keyboardShortcut("t", modifiers: [.command, .option])
             }
             
             // View Menu
             CommandMenu("View") {
                 Picker("Appearance", selection: $appState.colorScheme) {
-                    Text("System").tag(nil as ColorScheme?)
-                    Text("Light").tag(ColorScheme.light)
-                    Text("Dark").tag(ColorScheme.dark)
+                    Label("System", systemImage: "gear")
+                        .tag(nil as ColorScheme?)
+                    Label("Light", systemImage: "sun.max")
+                        .tag(ColorScheme.light)
+                    Label("Dark", systemImage: "moon")
+                        .tag(ColorScheme.dark)
                 }
-                Toggle("Status Bar", isOn: $appState.showStatusBar)
+                
+                Toggle(isOn: $appState.showStatusBar) {
+                    Label("Status Bar", systemImage: "rectangle.bottomthird.inset.filled")
+                }
             }
             
             // Tab Selection Keyboard Shortcuts
             CommandGroup(after: .windowArrangement) {
                 ForEach(1...9, id: \.self) { number in
-                    Button("Tab \(number)") {
-                        // Fixed: Remove $ prefix for method calls
-                        appState.selectTabByNumber(number)
+                    Button(action: {
+                        DispatchQueue.main.async {
+                            appState.selectTabByNumber(number)
+                        }
+                    }) {
+                        Label("Tab \(number)", systemImage: "\(number).square")
                     }
                     .keyboardShortcut(KeyEquivalent(Character(String(number))), modifiers: .command)
                 }
                 
                 // Additional tab navigation shortcuts
-                Button("Next Tab") {
+                Button(action: {
                     if let current = appState.currentTab, current < appState.tabs.count - 1 {
-                        appState.selectTab(at: current + 1)
+                        DispatchQueue.main.async {
+                            appState.selectTab(at: current + 1)
+                        }
                     }
+                }) {
+                    Label("Next Tab", systemImage: "arrow.right")
                 }
                 .keyboardShortcut("]", modifiers: .command)
                 
-                Button("Previous Tab") {
+                Button(action: {
                     if let current = appState.currentTab, current > 0 {
-                        appState.selectTab(at: current - 1)
+                        DispatchQueue.main.async {
+                            appState.selectTab(at: current - 1)
+                        }
                     }
+                }) {
+                    Label("Previous Tab", systemImage: "arrow.left")
                 }
                 .keyboardShortcut("[", modifiers: .command)
             }
+            
+            // Help menu
+            CommandGroup(after: .help) {
+                Button(action: { openHelpWindow() }) {
+                    Label("NotepadClone2 Help", systemImage: "questionmark.circle")
+                }
+                .keyboardShortcut("?", modifiers: .command)
+            }
         }
         .windowToolbarStyle(.unified)
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func openHelpWindow() {
+        // Open built-in help or external documentation
+        let helpText = """
+        Welcome to NotepadClone2!
+        
+        Key Features:
+        • Rich text editing with syntax highlighting
+        • Multi-tab interface
+        • Keyboard shortcuts for efficient editing
+        • Auto-save functionality
+        • Find and replace with regex support
+        
+        Quick Tips:
+        • Cmd+T to create a new tab
+        • Cmd+W to close current tab
+        • Cmd+F to find text
+        • Cmd+/ for quick find
+        • Cmd+1-9 to switch between tabs
+        """
+        
+        let alert = NSAlert()
+        alert.messageText = "NotepadClone2 Help"
+        alert.informativeText = helpText
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        
+        // Create a scroll view for the help text if it gets too long
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        
+        let textView = NSTextView()
+        textView.string = helpText
+        textView.isEditable = false
+        textView.font = NSFont.systemFont(ofSize: 13)
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        
+        scrollView.documentView = textView
+        scrollView.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        
+        alert.accessoryView = scrollView
+        alert.runModal()
     }
 }

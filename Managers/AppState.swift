@@ -38,6 +38,10 @@ class AppState: ObservableObject {
     @AppStorage("auto_save_enabled") private var autoSaveEnabled = true
     @AppStorage("auto_save_interval") private var autoSaveInterval = 30.0
     
+    // State management queue to prevent publishing issues
+    private let stateQueue = DispatchQueue(label: "com.notepadclone.state", qos: .userInitiated)
+    private var windowObserver: NSObjectProtocol?
+    
     var windowTitle: String {
         if let currentTab = currentTab, currentTab < tabs.count {
             let doc = tabs[currentTab]
@@ -56,10 +60,66 @@ class AppState: ObservableObject {
         
         // Set up auto-save timer
         setupAutoSave()
+        setupDisplayChangeHandling()
+        setupWindowHandling()
     }
     
     deinit {
         autoSaveTimer?.invalidate()
+        if let observer = windowObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    
+    // MARK: - State Management Helper
+    
+    private func safeStateUpdate(_ update: @escaping () -> Void) {
+        stateQueue.async {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                update()
+            }
+        }
+    }
+    
+    // MARK: - Window & Display Management
+    
+    private func setupWindowHandling() {
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let window = notification.object as? NSWindow {
+                self?.handleWindowWillClose(window)
+            }
+        }
+    }
+    
+    private func handleWindowWillClose(_ window: NSWindow) {
+        // Clean up any view-related state
+        safeStateUpdate {
+            self.tabs.forEach { tab in
+                // Reset any pending state
+                tab.hasUnsavedChanges = false
+            }
+        }
+    }
+    
+    private func setupDisplayChangeHandling() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleDisplayChange()
+        }
+    }
+    
+    private func handleDisplayChange() {
+        // Refresh any view state that might be affected by display changes
+        tabs.forEach { tab in
+            tab.updateTheme()
+        }
     }
     
     // MARK: - Auto-Save Management
@@ -91,7 +151,6 @@ class AppState: ObservableObject {
             }
         } catch {
             print("Auto-save error: \(error)")
-            // Optionally show user alert for save errors
         }
     }
     
@@ -111,46 +170,56 @@ class AppState: ObservableObject {
     
     // MARK: - File Operations
     func newDocument() {
-        let newDoc = Document()
-        tabs.append(newDoc)
-        currentTab = tabs.count - 1
+        safeStateUpdate {
+            let newDoc = Document()
+            self.tabs.append(newDoc)
+            self.currentTab = self.tabs.count - 1
+        }
     }
     
     func openDocument() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [UTType.rtf, UTType.plainText]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
         
-        // Check if file is already open
-        if let existingIndex = tabs.firstIndex(where: { $0.fileURL == url }) {
-            currentTab = existingIndex
-            return
-        }
-        
-        do {
-            var documentAttributes: NSDictionary?
-            let content = try NSAttributedString(url: url, options: [:], documentAttributes: &documentAttributes)
+        // Run panel on main thread
+        DispatchQueue.main.async {
+            guard panel.runModal() == .OK, let url = panel.url else { return }
             
-            let newDoc = Document()
-            if content.length == 0 {
-                newDoc.attributedText = NSAttributedString(string: "")
-                newDoc.text = ""
-            } else {
-                newDoc.attributedText = content
-                newDoc.text = content.string
+            // Check if file is already open
+            if let existingIndex = self.tabs.firstIndex(where: { $0.fileURL == url }) {
+                self.safeStateUpdate {
+                    self.currentTab = existingIndex
+                }
+                return
             }
-            newDoc.fileURL = url
-            newDoc.hasUnsavedChanges = false
             
-            tabs.append(newDoc)
-            currentTab = tabs.count - 1
-            
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "Error Opening File"
-            alert.informativeText = error.localizedDescription
-            alert.alertStyle = .warning
-            alert.runModal()
+            do {
+                var documentAttributes: NSDictionary?
+                let content = try NSAttributedString(url: url, options: [:], documentAttributes: &documentAttributes)
+                
+                let newDoc = Document()
+                if content.length == 0 {
+                    newDoc.attributedText = NSAttributedString(string: "")
+                    newDoc.text = ""
+                } else {
+                    newDoc.attributedText = content
+                    newDoc.text = content.string
+                }
+                newDoc.fileURL = url
+                newDoc.hasUnsavedChanges = false
+                
+                self.safeStateUpdate {
+                    self.tabs.append(newDoc)
+                    self.currentTab = self.tabs.count - 1
+                }
+                
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Error Opening File"
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .warning
+                alert.runModal()
+            }
         }
     }
     
@@ -183,9 +252,12 @@ class AppState: ObservableObject {
             panel.directoryURL = url.deletingLastPathComponent()
             panel.nameFieldStringValue = url.lastPathComponent
         }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        saveTo(url: url)
-        tabs[currentTab].fileURL = url
+        
+        DispatchQueue.main.async {
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            self.saveTo(url: url)
+            self.tabs[currentTab].fileURL = url
+        }
     }
     
     private func saveTo(url: URL) {
@@ -227,31 +299,37 @@ class AppState: ObservableObject {
             
             // Reset to a valid tab if available
             if !tabs.isEmpty {
-                currentTab = 0
+                safeStateUpdate {
+                    self.currentTab = 0
+                }
             }
             return
         }
         
-        currentTab = index
+        // Use safe state update to prevent publishing issues
+        safeStateUpdate {
+            self.currentTab = index
+        }
     }
     
     // MARK: - Tab Selection by Number
     func selectTabByNumber(_ number: Int) {
         // Convert 1-based tab number to 0-based index
         let index = number - 1
-        
-        // Use the existing selectTab method with validation
         selectTab(at: index)
     }
     
     func closeDocument(at index: Int) {
-        // Validate index bounds
+        // Guard against invalid indices
         guard index >= 0 && index < tabs.count else {
-            print("Error: Attempted to close tab at invalid index \(index). Valid range: 0..<\(tabs.count)")
+            print("Error: Attempted to close tab at invalid index \(index)")
             return
         }
         
-        if tabs[index].hasUnsavedChanges {
+        // Make a defensive copy of the document before closing
+        let documentToClose = tabs[index]
+        
+        if documentToClose.hasUnsavedChanges {
             let alert = NSAlert()
             alert.messageText = "Do you want to save changes?"
             alert.informativeText = "Your changes will be lost if you don't save them."
@@ -263,9 +341,17 @@ class AppState: ObservableObject {
             let response = alert.runModal()
             switch response {
             case .alertFirstButtonReturn: // Save
-                currentTab = index
-                saveDocument()
-                if tabs.count > index && tabs[index].hasUnsavedChanges { // If save was cancelled
+                // Safely set current tab for saving
+                if index < tabs.count && tabs.indices.contains(index) {
+                    safeStateUpdate {
+                        self.currentTab = index
+                        self.saveDocument()
+                        
+                        // Continue with close after save
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            self.performTabClose(at: index)
+                        }
+                    }
                     return
                 }
             case .alertSecondButtonReturn: // Don't Save
@@ -275,19 +361,44 @@ class AppState: ObservableObject {
             }
         }
         
-        tabs.remove(at: index)
-        
-        if tabs.isEmpty {
-            newDocument()
-        } else if currentTab == index {
-            currentTab = min(index, tabs.count - 1)
-        } else if let current = currentTab, current > index {
-            currentTab = current - 1
+        // Perform the actual close operation
+        performTabClose(at: index)
+    }
+    
+    private func performTabClose(at index: Int) {
+        // Double-check index validity before removal
+        guard index < tabs.count else {
+            print("Error: Tab array was modified during save operation")
+            return
         }
         
-        // Final validation
-        if let current = currentTab, current >= tabs.count || current < 0 {
-            currentTab = tabs.isEmpty ? nil : 0
+        // Use safe state update
+        safeStateUpdate {
+            // Remove the tab
+            self.tabs.remove(at: index)
+            
+            // Safely handle currentTab adjustment
+            if self.tabs.isEmpty {
+                self.newDocument()
+                self.currentTab = 0
+            } else {
+                // Adjust currentTab to remain valid
+                if self.currentTab == index {
+                    self.currentTab = min(index, self.tabs.count - 1)
+                } else if let current = self.currentTab, current > index {
+                    self.currentTab = current - 1
+                }
+                
+                // Final validation - ensure currentTab is valid
+                if let current = self.currentTab {
+                    if current >= self.tabs.count || current < 0 {
+                        self.currentTab = !self.tabs.isEmpty ? 0 : nil
+                    }
+                }
+            }
+            
+            // Force a UI refresh
+            self.objectWillChange.send()
         }
     }
     
@@ -377,6 +488,51 @@ class AppState: ObservableObject {
         }
     }
     
+    // MARK: - Additional Search Features
+    func showJumpToLinePanel() {
+        // Present a simple input dialog for line number
+        let alert = NSAlert()
+        alert.messageText = "Jump to Line"
+        alert.informativeText = "Enter line number:"
+        
+        let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+        inputTextField.placeholderString = "Line number"
+        
+        alert.accessoryView = inputTextField
+        alert.addButton(withTitle: "Go")
+        alert.addButton(withTitle: "Cancel")
+        
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            if let lineNumber = Int(inputTextField.stringValue) {
+                jumpToLine(lineNumber)
+            }
+        }
+    }
+    
+    private func jumpToLine(_ lineNumber: Int) {
+        guard let currentTab = currentTab,
+              currentTab >= 0 && currentTab < tabs.count else { return }
+        
+        let text = tabs[currentTab].text
+        let lines = text.components(separatedBy: .newlines)
+        
+        if lineNumber > 0 && lineNumber <= lines.count {
+            // Calculate character position for the line
+            let lineIndex = lineNumber - 1
+            var charPosition = 0
+            
+            for i in 0..<lineIndex {
+                charPosition += lines[i].count + 1 // +1 for newline
+            }
+            
+            // Send the command to jump to that position
+            NSApp.sendAction(#selector(NSTextView.scrollRangeToVisible(_:)),
+                           to: nil,
+                           from: NSRange(location: charPosition, length: 0))
+        }
+    }
+    
     // MARK: - Print Operation
     func printDocument() {
         // Get the current text view and print it
@@ -414,8 +570,10 @@ class AppState: ObservableObject {
             printOperation.jobTitle = tabs[currentTab].displayName
         }
         
-        // Run print operation
-        printOperation.run()
+        // Run print operation asynchronously
+        safeStateUpdate {
+            printOperation.run()
+        }
     }
     
     // MARK: - Tab Renaming
@@ -428,7 +586,9 @@ class AppState: ObservableObject {
         // Prevent empty names
         let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty {
-            tabs[index].customName = trimmedName
+            safeStateUpdate {
+                self.tabs[index].customName = trimmedName
+            }
         }
     }
 }
