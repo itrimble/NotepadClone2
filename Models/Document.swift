@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 
 class Document: ObservableObject, Identifiable {
-    // MARK: - Identifiable
-    let id = UUID() // Add unique identifier for each document
+    // MARK: - Identifiable (Persistent across sessions)
+    let id: UUID
     
     @Published var text = "" {
         didSet {
@@ -71,7 +71,20 @@ class Document: ObservableObject, Identifiable {
     private var lastEditTime: TimeInterval = 0
     private let editCoalescingInterval: TimeInterval = 1.0
     
+    // MARK: - Initializers
+    
     init() {
+        self.id = UUID() // Create new unique ID
+        setupDocument()
+    }
+    
+    // Initialize with existing ID (for session restoration)
+    init(id: UUID) {
+        self.id = id
+        setupDocument()
+    }
+    
+    private func setupDocument() {
         updateWordCount()
         updateHighlighter()
         
@@ -179,23 +192,28 @@ class Document: ObservableObject, Identifiable {
     // MARK: - Document State Management
     
     struct DocumentState: Codable {
+        let id: String // Store UUID as string for JSON serialization
         let text: String
         let language: String // Stored as string for serialization
         let customName: String?
         let fileURLPath: String?
+        
+        // Initialize from Document
+        init(from document: Document) {
+            self.id = document.id.uuidString
+            self.text = document.text
+            self.language = document.language.rawValue
+            self.customName = document.customName
+            self.fileURLPath = document.fileURL?.path
+        }
     }
     
     func saveState() -> DocumentState {
-        return DocumentState(
-            text: text,
-            language: language.rawValue,
-            customName: customName,
-            fileURLPath: fileURL?.path
-        )
+        return DocumentState(from: self)
     }
     
     func restoreState(_ state: DocumentState) {
-        // This method could be useful for saving/restoring document sessions
+        // Note: ID should already match when restoring
         text = state.text
         if let restoredLanguage = SyntaxHighlighter.Language(rawValue: state.language) {
             language = restoredLanguage
@@ -204,5 +222,40 @@ class Document: ObservableObject, Identifiable {
         if let urlPath = state.fileURLPath {
             fileURL = URL(fileURLWithPath: urlPath)
         }
+    }
+    
+    // MARK: - Session State Management
+    
+    static func fromState(_ state: DocumentState) -> Document {
+        // Create document with existing ID
+        guard let restoredID = UUID(uuidString: state.id) else {
+            print("Warning: Invalid UUID string, creating new document")
+            return Document() // Fallback to new document
+        }
+        
+        let document = Document(id: restoredID)
+        document.restoreState(state)
+        return document
+    }
+}
+
+// MARK: - Session State Management
+extension Document {
+    // Save all document states to UserDefaults
+    static func saveSessionState(documents: [Document]) {
+        let states = documents.map { $0.saveState() }
+        if let encoded = try? JSONEncoder().encode(states) {
+            UserDefaults.standard.set(encoded, forKey: "DocumentSessionState")
+        }
+    }
+    
+    // Restore documents from UserDefaults
+    static func restoreSessionState() -> [Document] {
+        guard let data = UserDefaults.standard.data(forKey: "DocumentSessionState"),
+              let states = try? JSONDecoder().decode([DocumentState].self, from: data) else {
+            return []
+        }
+        
+        return states.map { Document.fromState($0) }
     }
 }

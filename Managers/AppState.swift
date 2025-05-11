@@ -37,6 +37,7 @@ class AppState: ObservableObject {
     
     @AppStorage("auto_save_enabled") private var autoSaveEnabled = true
     @AppStorage("auto_save_interval") private var autoSaveInterval = 30.0
+    @AppStorage("restore_session") private var restoreSession = true
     
     // State management queue to prevent publishing issues
     private let stateQueue = DispatchQueue(label: "com.notepadclone.state", qos: .userInitiated)
@@ -55,19 +56,127 @@ class AppState: ObservableObject {
     init() {
         // Initialize find manager with reference to self
         self.findManager = FindPanelManager(appState: self)
-        // Start with one empty document
-        newDocument()
+        
+        // Restore previous session or create new document
+        if restoreSession && restorePreviousSession() {
+            print("Session restored successfully")
+        } else {
+            // Create new document if no session to restore
+            newDocument()
+        }
         
         // Set up auto-save timer
         setupAutoSave()
         setupDisplayChangeHandling()
         setupWindowHandling()
+        
+        // Save session when app terminates
+        setupSessionSaving()
     }
     
     deinit {
         autoSaveTimer?.invalidate()
         if let observer = windowObserver {
             NotificationCenter.default.removeObserver(observer)
+        }
+        
+        // Save session state on app termination
+        saveSessionState()
+    }
+    
+    // MARK: - Session Management
+    
+    private func setupSessionSaving() {
+        // Save session when app becomes inactive or terminates
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.saveSessionState()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.saveSessionState()
+        }
+    }
+    
+    private func saveSessionState() {
+        guard restoreSession else { return }
+        
+        // Save current tab index
+        UserDefaults.standard.set(currentTab, forKey: "CurrentTabIndex")
+        
+        // Save document states
+        Document.saveSessionState(documents: tabs)
+        
+        // Save window state
+        saveWindowState()
+    }
+    
+    private func restorePreviousSession() -> Bool {
+        // Restore documents
+        let restoredDocs = Document.restoreSessionState()
+        
+        guard !restoredDocs.isEmpty else {
+            return false
+        }
+        
+        tabs = restoredDocs
+        
+        // Restore current tab
+        if let savedTabIndex = UserDefaults.standard.value(forKey: "CurrentTabIndex") as? Int,
+           savedTabIndex >= 0 && savedTabIndex < tabs.count {
+            currentTab = savedTabIndex
+        } else {
+            currentTab = 0
+        }
+        
+        // Restore window state
+        restoreWindowState()
+        
+        return true
+    }
+    
+    private func saveWindowState() {
+        // Save additional window-specific state
+        UserDefaults.standard.set(showStatusBar, forKey: "ShowStatusBar")
+        
+        // Save color scheme using custom approach
+        if let colorScheme = colorScheme {
+            switch colorScheme {
+            case .light:
+                UserDefaults.standard.set("light", forKey: "ColorScheme")
+            case .dark:
+                UserDefaults.standard.set("dark", forKey: "ColorScheme")
+            @unknown default:
+                UserDefaults.standard.removeObject(forKey: "ColorScheme")
+            }
+        } else {
+            UserDefaults.standard.removeObject(forKey: "ColorScheme")
+        }
+    }
+    
+    private func restoreWindowState() {
+        // Restore window state
+        showStatusBar = UserDefaults.standard.bool(forKey: "ShowStatusBar")
+        
+        // Restore color scheme using custom approach
+        if let colorSchemeString = UserDefaults.standard.string(forKey: "ColorScheme") {
+            switch colorSchemeString {
+            case "light":
+                colorScheme = .light
+            case "dark":
+                colorScheme = .dark
+            default:
+                colorScheme = nil // System default
+            }
+        } else {
+            colorScheme = nil // System default
         }
     }
     
@@ -96,6 +205,9 @@ class AppState: ObservableObject {
     }
     
     private func handleWindowWillClose(_ window: NSWindow) {
+        // Save session before window closes
+        saveSessionState()
+        
         // Clean up any view-related state
         safeStateUpdate {
             self.tabs.forEach { tab in
