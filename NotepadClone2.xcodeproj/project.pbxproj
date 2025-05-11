@@ -6,6 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3C742E592DD011CA00CFDBBE /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E582DD011C100CFDBBE /* AppState.swift */; };
+		3C742E5B2DD011E200CFDBBE /* NotepadCloneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E5A2DD011CF00CFDBBE /* NotepadCloneApp.swift */; };
+		3C742E5D2DD0121400CFDBBE /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E5C2DD011EE00CFDBBE /* ContentView.swift */; };
+		3C742E5F2DD0122800CFDBBE /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E5E2DD0121F00CFDBBE /* Document.swift */; };
+		3C742E612DD0123900CFDBBE /* CustomTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E602DD0122E00CFDBBE /* CustomTextView.swift */; };
+		3C742E632DD0124300CFDBBE /* StatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E622DD0123E00CFDBBE /* StatusBar.swift */; };
+		3C742E652DD0128500CFDBBE /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E642DD0128000CFDBBE /* TabBarView.swift */; };
+		3C742E712DD01A0B00CFDBBE /* FindPanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */; };
+		3C742E762DD0289500CFDBBE /* PreferencesWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		3C742E3C2DD0118400CFDBBE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,14 +39,18 @@
 		3C742E2D2DD0118300CFDBBE /* NotepadClone2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NotepadClone2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C742E3B2DD0118400CFDBBE /* NotepadClone2Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotepadClone2Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C742E452DD0118400CFDBBE /* NotepadClone2UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotepadClone2UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3C742E582DD011C100CFDBBE /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		3C742E5A2DD011CF00CFDBBE /* NotepadCloneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotepadCloneApp.swift; sourceTree = "<group>"; };
+		3C742E5C2DD011EE00CFDBBE /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3C742E5E2DD0121F00CFDBBE /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
+		3C742E602DD0122E00CFDBBE /* CustomTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTextView.swift; sourceTree = "<group>"; };
+		3C742E622DD0123E00CFDBBE /* StatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBar.swift; sourceTree = "<group>"; };
+		3C742E642DD0128000CFDBBE /* TabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarView.swift; sourceTree = "<group>"; };
+		3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindPanelManager.swift; sourceTree = "<group>"; };
+		3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindows.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3C742E2F2DD0118300CFDBBE /* NotepadClone2 */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = NotepadClone2;
-			sourceTree = "<group>";
-		};
 		3C742E3E2DD0118400CFDBBE /* NotepadClone2Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = NotepadClone2Tests;
@@ -43,6 +59,11 @@
 		3C742E482DD0118400CFDBBE /* NotepadClone2UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = NotepadClone2UITests;
+			sourceTree = "<group>";
+		};
+		3C742E742DD021F700CFDBBE /* Utilities */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Utilities;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,10 +96,15 @@
 		3C742E242DD0118300CFDBBE = {
 			isa = PBXGroup;
 			children = (
-				3C742E2F2DD0118300CFDBBE /* NotepadClone2 */,
+				3C742E742DD021F700CFDBBE /* Utilities */,
+				3C742E692DD0134D00CFDBBE /* Components */,
+				3C742E682DD0134800CFDBBE /* Managers */,
+				3C742E672DD0133E00CFDBBE /* Models */,
+				3C742E662DD0133400CFDBBE /* Views */,
 				3C742E3E2DD0118400CFDBBE /* NotepadClone2Tests */,
 				3C742E482DD0118400CFDBBE /* NotepadClone2UITests */,
 				3C742E2E2DD0118300CFDBBE /* Products */,
+				3C742E5A2DD011CF00CFDBBE /* NotepadCloneApp.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -90,6 +116,42 @@
 				3C742E452DD0118400CFDBBE /* NotepadClone2UITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		3C742E662DD0133400CFDBBE /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */,
+				3C742E5C2DD011EE00CFDBBE /* ContentView.swift */,
+				3C742E622DD0123E00CFDBBE /* StatusBar.swift */,
+				3C742E642DD0128000CFDBBE /* TabBarView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		3C742E672DD0133E00CFDBBE /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				3C742E5E2DD0121F00CFDBBE /* Document.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		3C742E682DD0134800CFDBBE /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				3C742E582DD011C100CFDBBE /* AppState.swift */,
+				3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		3C742E692DD0134D00CFDBBE /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				3C742E602DD0122E00CFDBBE /* CustomTextView.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -108,7 +170,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3C742E2F2DD0118300CFDBBE /* NotepadClone2 */,
+				3C742E742DD021F700CFDBBE /* Utilities */,
 			);
 			name = NotepadClone2;
 			packageProductDependencies = (
@@ -236,6 +298,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3C742E762DD0289500CFDBBE /* PreferencesWindows.swift in Sources */,
+				3C742E632DD0124300CFDBBE /* StatusBar.swift in Sources */,
+				3C742E5B2DD011E200CFDBBE /* NotepadCloneApp.swift in Sources */,
+				3C742E652DD0128500CFDBBE /* TabBarView.swift in Sources */,
+				3C742E612DD0123900CFDBBE /* CustomTextView.swift in Sources */,
+				3C742E5D2DD0121400CFDBBE /* ContentView.swift in Sources */,
+				3C742E712DD01A0B00CFDBBE /* FindPanelManager.swift in Sources */,
+				3C742E592DD011CA00CFDBBE /* AppState.swift in Sources */,
+				3C742E5F2DD0122800CFDBBE /* Document.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -390,7 +461,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NotepadClone2/NotepadClone2.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CLDQBGZBDU;
@@ -414,6 +487,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.trimbletech.NotepadClone2;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
@@ -429,7 +503,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NotepadClone2/NotepadClone2.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CLDQBGZBDU;
@@ -453,6 +529,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.trimbletech.NotepadClone2;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
