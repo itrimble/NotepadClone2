@@ -2,6 +2,90 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
 
+// Custom window delegate to handle window close events
+class CustomWindowDelegate: NSObject, NSWindowDelegate {
+    weak var appState: AppState?
+    
+    init(appState: AppState) {
+        self.appState = appState
+        super.init()
+    }
+    
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let appState = appState else { return true }
+        
+        // Get current event to check for option key
+        if let event = NSApp.currentEvent, event.modifierFlags.contains(.option) {
+            // Option-close: Close all tabs
+            handleCloseAllTabs()
+            return false // We're handling the close
+        } else if appState.tabs.count > 1 {
+            // Regular close with multiple tabs: Just close the current tab
+            if let currentTab = appState.currentTab {
+                appState.closeDocument(at: currentTab)
+            }
+            return false // We handled it by closing just the tab
+        }
+        
+        // With only one tab, proceed with standard window close
+        return true
+    }
+    
+    private func handleCloseAllTabs() {
+        guard let appState = appState, !appState.tabs.isEmpty else { return }
+        
+        // Create a copy of tabs to avoid modification during iteration
+        let tabCount = appState.tabs.count
+        
+        // Check if any tabs have unsaved changes
+        let hasUnsavedChanges = appState.tabs.contains { $0.hasUnsavedChanges }
+        
+        if hasUnsavedChanges {
+            // Ask once for all tabs with unsaved changes
+            let alert = NSAlert()
+            alert.messageText = "Close all tabs?"
+            alert.informativeText = "There are unsaved changes. Do you want to save them before closing?"
+            alert.addButton(withTitle: "Save All")
+            alert.addButton(withTitle: "Don't Save")
+            alert.addButton(withTitle: "Cancel")
+            
+            let response = alert.runModal()
+            
+            switch response {
+            case .alertFirstButtonReturn: // Save All
+                // Save each tab with unsaved changes
+                for i in 0..<tabCount {
+                    if i < appState.tabs.count && appState.tabs[i].hasUnsavedChanges {
+                        appState.currentTab = i
+                        appState.saveDocument()
+                    }
+                }
+                
+                // Close all tabs after saving
+                closeAllTabsWithoutPrompting()
+                
+            case .alertSecondButtonReturn: // Don't Save
+                closeAllTabsWithoutPrompting()
+                
+            default: // Cancel
+                return
+            }
+        } else {
+            // No unsaved changes, close all tabs
+            closeAllTabsWithoutPrompting()
+        }
+    }
+    
+    private func closeAllTabsWithoutPrompting() {
+        guard let appState = appState else { return }
+        
+        // Close tabs from back to front to avoid index issues
+        while !appState.tabs.isEmpty {
+            appState.performTabClose(at: appState.tabs.count - 1)
+        }
+    }
+}
+
 // Dummy responder to declare standard AppKit selectors
 class DummyResponder: NSResponder {
     @objc func bold(_ sender: Any?) {}
@@ -27,7 +111,28 @@ class AppState: ObservableObject {
     @Published var tabs: [Document] = []
     @Published var currentTab: Int? = nil
     @Published var showStatusBar = true
+    
+    // Theme support
+    @Published var appTheme: AppTheme = .system {
+        didSet {
+            if oldValue != appTheme {
+                // Apply the theme
+                appTheme.apply()
+                // Save the theme preference
+                appTheme.save()
+                // Update color scheme based on theme
+                colorScheme = appTheme.colorScheme
+                // Notify observers
+                objectWillChange.send()
+            }
+        }
+    }
+    
+    // Keep colorScheme for backward compatibility
     @Published var colorScheme: ColorScheme? = nil
+    
+    // User preference for tab switching
+    @AppStorage("switch_to_new_tab") var switchToNewTab = false // Default: don't switch
     
     // Find Panel Manager
     var findManager: FindPanelManager!
@@ -43,6 +148,14 @@ class AppState: ObservableObject {
     private let stateQueue = DispatchQueue(label: "com.notepadclone.state", qos: .userInitiated)
     private var windowObserver: NSObjectProtocol?
     
+    // Window delegate reference
+    private var windowDelegates: [NSWindow: CustomWindowDelegate] = [:]
+    private var windowObservers: [NSObjectProtocol] = []
+    
+    // Timestamp-based debouncing for tab creation operations
+    private var lastTabCreationTime: Date = Date(timeIntervalSince1970: 0)
+    private let minimumTabCreationInterval: TimeInterval = 0.3 // 300ms
+    
     var windowTitle: String {
         if let currentTab = currentTab, currentTab < tabs.count {
             let doc = tabs[currentTab]
@@ -54,8 +167,17 @@ class AppState: ObservableObject {
     }
     
     init() {
+        // Load saved theme
+        self.appTheme = AppTheme.loadSavedTheme()
+        
         // Initialize find manager with reference to self
         self.findManager = FindPanelManager(appState: self)
+        
+        // Apply the theme
+        appTheme.apply()
+        
+        // Set color scheme based on theme
+        colorScheme = appTheme.colorScheme
         
         // Restore previous session or create new document
         if restoreSession && restorePreviousSession() {
@@ -72,6 +194,9 @@ class AppState: ObservableObject {
         
         // Save session when app terminates
         setupSessionSaving()
+        
+        // Set up window delegate for all windows
+        setupWindowDelegates()
     }
     
     deinit {
@@ -80,8 +205,53 @@ class AppState: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         
+        // Clean up window observers
+        for observer in windowObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        windowObservers.removeAll()
+        
         // Save session state on app termination
         saveSessionState()
+    }
+    
+    // MARK: - Window Delegate Setup
+    
+    private func setupWindowDelegates() {
+        // Set up delegate for any existing windows
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Handle existing windows
+            for window in NSApp.windows {
+                self.setWindowDelegate(for: window)
+            }
+            
+            // Listen for new windows
+            let newWindowObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self = self,
+                      let window = notification.object as? NSWindow else { return }
+                
+                self.setWindowDelegate(for: window)
+            }
+            
+            self.windowObservers.append(newWindowObserver)
+        }
+    }
+    
+    private func setWindowDelegate(for window: NSWindow) {
+        // Only set delegate if we haven't already set one for this window
+        if windowDelegates[window] == nil {
+            let delegate = CustomWindowDelegate(appState: self)
+            window.delegate = delegate
+            windowDelegates[window] = delegate
+            
+            print("Set window delegate for window: \(window)")
+        }
     }
     
     // MARK: - Session Management
@@ -146,7 +316,10 @@ class AppState: ObservableObject {
         // Save additional window-specific state
         UserDefaults.standard.set(showStatusBar, forKey: "ShowStatusBar")
         
-        // Save color scheme using custom approach
+        // Save theme and color scheme
+        appTheme.save()
+        
+        // For backward compatibility - also save colorScheme
         if let colorScheme = colorScheme {
             switch colorScheme {
             case .light:
@@ -165,18 +338,26 @@ class AppState: ObservableObject {
         // Restore window state
         showStatusBar = UserDefaults.standard.bool(forKey: "ShowStatusBar")
         
-        // Restore color scheme using custom approach
+        // Load theme (already done in init, but we'll make sure it's applied)
+        appTheme = AppTheme.loadSavedTheme()
+        appTheme.apply()
+        
+        // Set color scheme based on theme
+        colorScheme = appTheme.colorScheme
+        
+        // For backward compatibility - check old color scheme settings
         if let colorSchemeString = UserDefaults.standard.string(forKey: "ColorScheme") {
             switch colorSchemeString {
             case "light":
                 colorScheme = .light
+                appTheme = .light
             case "dark":
                 colorScheme = .dark
+                appTheme = .dark
             default:
                 colorScheme = nil // System default
+                appTheme = .system
             }
-        } else {
-            colorScheme = nil // System default
         }
     }
     
@@ -215,6 +396,9 @@ class AppState: ObservableObject {
                 tab.hasUnsavedChanges = false
             }
         }
+        
+        // Remove window delegate reference
+        windowDelegates.removeValue(forKey: window)
     }
     
     private func setupDisplayChangeHandling() {
@@ -280,12 +464,58 @@ class AppState: ObservableObject {
         setupAutoSave()
     }
     
+    // MARK: - Theme Management
+    
+    // Update the active theme
+    func setTheme(_ theme: AppTheme) {
+        appTheme = theme
+    }
+    
+    // Get the current theme
+    func getCurrentTheme() -> AppTheme {
+        return appTheme
+    }
+    
     // MARK: - File Operations
+    
+    /// Creates a new document tab
+    /// Uses a timestamp-based debouncing mechanism to prevent duplicate tab creation
     func newDocument() {
-        safeStateUpdate {
+        // Get current time
+        let now = Date()
+        
+        // Check if enough time has passed since the last tab creation
+        let timeElapsed = now.timeIntervalSince(lastTabCreationTime)
+        if timeElapsed < minimumTabCreationInterval {
+            print("Tab creation debounced - too soon since last creation (\(timeElapsed) seconds)")
+            return
+        }
+        
+        // Update the timestamp immediately
+        lastTabCreationTime = now
+        
+        // Use direct main thread update for responsiveness
+        DispatchQueue.main.async {
+            // Create new document
             let newDoc = Document()
             self.tabs.append(newDoc)
-            self.currentTab = self.tabs.count - 1
+            
+            // Only switch to the new tab if the preference is enabled
+            if self.switchToNewTab {
+                self.currentTab = self.tabs.count - 1
+            }
+            
+            // Force UI update
+            self.objectWillChange.send()
+            
+            // Post notification about tab change
+            NotificationCenter.default.post(
+                name: .appStateTabDidChange,
+                object: self
+            )
+            
+            // Debug info
+            print("Tab created at \(now), total tabs: \(self.tabs.count)")
         }
     }
     
@@ -299,8 +529,10 @@ class AppState: ObservableObject {
             
             // Check if file is already open
             if let existingIndex = self.tabs.firstIndex(where: { $0.fileURL == url }) {
-                self.safeStateUpdate {
+                // Use direct update for responsiveness
+                DispatchQueue.main.async {
                     self.currentTab = existingIndex
+                    self.objectWillChange.send()
                 }
                 return
             }
@@ -320,9 +552,17 @@ class AppState: ObservableObject {
                 newDoc.fileURL = url
                 newDoc.hasUnsavedChanges = false
                 
-                self.safeStateUpdate {
+                // Use direct update for responsiveness
+                DispatchQueue.main.async {
                     self.tabs.append(newDoc)
                     self.currentTab = self.tabs.count - 1
+                    self.objectWillChange.send()
+                    
+                    // Post notification
+                    NotificationCenter.default.post(
+                        name: .appStateTabDidChange,
+                        object: self
+                    )
                 }
                 
             } catch {
@@ -396,6 +636,8 @@ class AppState: ObservableObject {
     }
     
     // MARK: - Tab Management
+    
+    // Modified for direct updating without safeStateUpdate
     func selectTab(at index: Int) {
         // Auto-save current tab before switching
         if let currentTab = currentTab,
@@ -411,16 +653,25 @@ class AppState: ObservableObject {
             
             // Reset to a valid tab if available
             if !tabs.isEmpty {
-                safeStateUpdate {
+                // Use direct update for responsiveness
+                DispatchQueue.main.async {
                     self.currentTab = 0
+                    self.objectWillChange.send()
                 }
             }
             return
         }
         
-        // Use safe state update to prevent publishing issues
-        safeStateUpdate {
+        // Use direct update for responsiveness
+        DispatchQueue.main.async {
             self.currentTab = index
+            self.objectWillChange.send()
+            
+            // Post notification
+            NotificationCenter.default.post(
+                name: .appStateTabDidChange,
+                object: self
+            )
         }
     }
     
@@ -431,6 +682,7 @@ class AppState: ObservableObject {
         selectTab(at: index)
     }
     
+    // Modified for more responsive UI
     func closeDocument(at index: Int) {
         // Guard against invalid indices
         guard index >= 0 && index < tabs.count else {
@@ -455,7 +707,8 @@ class AppState: ObservableObject {
             case .alertFirstButtonReturn: // Save
                 // Safely set current tab for saving
                 if index < tabs.count && tabs.indices.contains(index) {
-                    safeStateUpdate {
+                    // Use direct update for responsiveness
+                    DispatchQueue.main.async {
                         self.currentTab = index
                         self.saveDocument()
                         
@@ -477,22 +730,23 @@ class AppState: ObservableObject {
         performTabClose(at: index)
     }
     
-    private func performTabClose(at index: Int) {
+    // Make internal instead of private so CustomWindowDelegate can use it
+    // Modified for direct updating
+    func performTabClose(at index: Int) {
         // Double-check index validity before removal
         guard index < tabs.count else {
             print("Error: Tab array was modified during save operation")
             return
         }
         
-        // Use safe state update
-        safeStateUpdate {
+        // Use direct update for responsiveness
+        DispatchQueue.main.async {
             // Remove the tab
             self.tabs.remove(at: index)
             
             // Safely handle currentTab adjustment
             if self.tabs.isEmpty {
                 self.newDocument()
-                self.currentTab = 0
             } else {
                 // Adjust currentTab to remain valid
                 if self.currentTab == index {
@@ -511,6 +765,12 @@ class AppState: ObservableObject {
             
             // Force a UI refresh
             self.objectWillChange.send()
+            
+            // Post notification
+            NotificationCenter.default.post(
+                name: .appStateTabDidChange,
+                object: self
+            )
         }
     }
     
@@ -682,10 +942,8 @@ class AppState: ObservableObject {
             printOperation.jobTitle = tabs[currentTab].displayName
         }
         
-        // Run print operation asynchronously
-        safeStateUpdate {
-            printOperation.run()
-        }
+        // Run print operation directly
+        printOperation.run()
     }
     
     // MARK: - Tab Renaming
@@ -698,8 +956,10 @@ class AppState: ObservableObject {
         // Prevent empty names
         let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty {
-            safeStateUpdate {
+            // Use direct update for responsiveness
+            DispatchQueue.main.async {
                 self.tabs[index].customName = trimmedName
+                self.objectWillChange.send()
             }
         }
     }

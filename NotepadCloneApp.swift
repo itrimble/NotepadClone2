@@ -3,28 +3,31 @@ import SwiftUI
 @main
 struct NotepadCloneApp: App {
     @StateObject private var appState = AppState()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .onAppear {
+                    // Configure any window properties when content appears
+                    setupWindowConfiguration()
+                }
         }
         .commands {
             // File Menu
             CommandGroup(replacing: .newItem) {
                 Button(action: {
-                    DispatchQueue.main.async {
-                        appState.newDocument()
-                    }
+                    // Debug info to track when command is executed
+                    print("New Tab command executed: \(Date())")
+                    appState.newDocument()
                 }) {
                     Label("New Tab", systemImage: "plus")
                 }
                 .keyboardShortcut("t", modifiers: [.command])
                 
                 Button(action: {
-                    DispatchQueue.main.async {
-                        appState.openDocument()
-                    }
+                    appState.openDocument()
                 }) {
                     Label("Open...", systemImage: "folder.badge.plus")
                 }
@@ -44,9 +47,7 @@ struct NotepadCloneApp: App {
                 
                 Button(action: {
                     if let currentTab = appState.currentTab {
-                        DispatchQueue.main.async {
-                            appState.closeDocument(at: currentTab)
-                        }
+                        appState.closeDocument(at: currentTab)
                     }
                 }) {
                     Label("Close Tab", systemImage: "xmark")
@@ -177,13 +178,22 @@ struct NotepadCloneApp: App {
             
             // View Menu
             CommandMenu("View") {
-                Picker("Appearance", selection: $appState.colorScheme) {
-                    Label("System", systemImage: "gear")
-                        .tag(nil as ColorScheme?)
-                    Label("Light", systemImage: "sun.max")
-                        .tag(ColorScheme.light)
-                    Label("Dark", systemImage: "moon")
-                        .tag(ColorScheme.dark)
+                // Updated to use a single Theme menu
+                Menu("Theme") {
+                    ForEach(AppTheme.allCases) { theme in
+                        Button(action: {
+                            appState.setTheme(theme)
+                        }) {
+                            HStack {
+                                Image(systemName: theme.iconName)
+                                Text(theme.rawValue)
+                                if appState.appTheme == theme {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 Toggle(isOn: $appState.showStatusBar) {
@@ -195,9 +205,7 @@ struct NotepadCloneApp: App {
             CommandGroup(after: .windowArrangement) {
                 ForEach(1...9, id: \.self) { number in
                     Button(action: {
-                        DispatchQueue.main.async {
-                            appState.selectTabByNumber(number)
-                        }
+                        appState.selectTabByNumber(number)
                     }) {
                         Label("Tab \(number)", systemImage: "\(number).square")
                     }
@@ -207,9 +215,7 @@ struct NotepadCloneApp: App {
                 // Additional tab navigation shortcuts
                 Button(action: {
                     if let current = appState.currentTab, current < appState.tabs.count - 1 {
-                        DispatchQueue.main.async {
-                            appState.selectTab(at: current + 1)
-                        }
+                        appState.selectTab(at: current + 1)
                     }
                 }) {
                     Label("Next Tab", systemImage: "arrow.right")
@@ -218,9 +224,7 @@ struct NotepadCloneApp: App {
                 
                 Button(action: {
                     if let current = appState.currentTab, current > 0 {
-                        DispatchQueue.main.async {
-                            appState.selectTab(at: current - 1)
-                        }
+                        appState.selectTab(at: current - 1)
                     }
                 }) {
                     Label("Previous Tab", systemImage: "arrow.left")
@@ -239,6 +243,22 @@ struct NotepadCloneApp: App {
         .windowToolbarStyle(.unified)
     }
     
+    // Configure window to match Notepad++ style
+    private func setupWindowConfiguration() {
+        DispatchQueue.main.async {
+            // Find the main window
+            if let window = NSApplication.shared.windows.first {
+                // Configure as needed
+                window.titleVisibility = .visible
+                window.titlebarAppearsTransparent = false
+                
+                // Set up window restoration using the concrete class
+                window.isRestorable = true
+                window.restorationClass = NotepadWindowRestorer.self
+            }
+        }
+    }
+    
     // MARK: - Helper Methods
     
     private func openHelpWindow() {
@@ -252,6 +272,7 @@ struct NotepadCloneApp: App {
         • Keyboard shortcuts for efficient editing
         • Auto-save functionality
         • Find and replace with regex support
+        • Multiple themes including Notepad++ style
         
         Quick Tips:
         • Cmd+T to create a new tab
@@ -259,6 +280,7 @@ struct NotepadCloneApp: App {
         • Cmd+F to find text
         • Cmd+/ for quick find
         • Cmd+1-9 to switch between tabs
+        • Change themes in the View menu
         """
         
         let alert = NSAlert()

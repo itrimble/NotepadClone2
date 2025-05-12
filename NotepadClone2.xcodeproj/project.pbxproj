@@ -16,6 +16,7 @@
 		3C742E652DD0128500CFDBBE /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E642DD0128000CFDBBE /* TabBarView.swift */; };
 		3C742E712DD01A0B00CFDBBE /* FindPanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */; };
 		3C742E762DD0289500CFDBBE /* PreferencesWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */; };
+		3CE811732DD173B900D55103 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE811722DD173B000D55103 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +49,7 @@
 		3C742E642DD0128000CFDBBE /* TabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarView.swift; sourceTree = "<group>"; };
 		3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindPanelManager.swift; sourceTree = "<group>"; };
 		3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindows.swift; sourceTree = "<group>"; };
+		3CE811722DD173B000D55103 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -142,6 +144,7 @@
 			children = (
 				3C742E582DD011C100CFDBBE /* AppState.swift */,
 				3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */,
+				3CE811722DD173B000D55103 /* AppDelegate.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -298,6 +301,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3CE811732DD173B900D55103 /* AppDelegate.swift in Sources */,
 				3C742E762DD0289500CFDBBE /* PreferencesWindows.swift in Sources */,
 				3C742E632DD0124300CFDBBE /* StatusBar.swift in Sources */,
 				3C742E5B2DD011E200CFDBBE /* NotepadCloneApp.swift in Sources */,

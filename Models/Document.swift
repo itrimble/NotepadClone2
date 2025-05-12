@@ -1,6 +1,9 @@
 import SwiftUI
 import AppKit
 
+// Notification names moved to Utilities/Notifications.swift
+// No longer declared here to prevent duplicate definitions
+
 class Document: ObservableObject, Identifiable {
     // MARK: - Identifiable (Persistent across sessions)
     let id: UUID
@@ -9,9 +12,13 @@ class Document: ObservableObject, Identifiable {
         didSet {
             if oldValue != text && !isUpdatingFromAttributed {
                 coalesceEdits()
-                updateWordCount()
+                // Use immediate word counting instead of delayed
+                updateWordCountImmediate()
                 hasUnsavedChanges = true
                 applyHighlighting()
+                
+                // Notify listeners that text has changed - critical for UI updates
+                NotificationCenter.default.post(name: .documentTextDidChange, object: self)
             }
         }
     }
@@ -25,9 +32,15 @@ class Document: ObservableObject, Identifiable {
                 if newPlainText != text {
                     // Use a flag to prevent circular updates
                     isUpdatingFromAttributed = true
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
                         self.text = newPlainText
                         self.isUpdatingFromAttributed = false
+                        // Force UI refresh
+                        self.objectWillChange.send()
+                        
+                        // Notify listeners
+                        NotificationCenter.default.post(name: .documentTextDidChange, object: self)
                     }
                 }
             }
@@ -85,7 +98,8 @@ class Document: ObservableObject, Identifiable {
     }
     
     private func setupDocument() {
-        updateWordCount()
+        // Initial word count
+        updateWordCountImmediate()
         updateHighlighter()
         
         // Observe system appearance changes
@@ -120,17 +134,44 @@ class Document: ObservableObject, Identifiable {
     
     // MARK: - Word Count Management
     
-    private func updateWordCount() {
-        wordCountTimer?.invalidate()
-        wordCountTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-            var count = 0
-            self.text.enumerateSubstrings(in: self.text.startIndex..<self.text.endIndex,
-                                          options: .byWords) { _, _, _, _ in
-                count += 1
-            }
-            DispatchQueue.main.async {
+    // Immediate word counting for UI responsiveness
+    private func updateWordCountImmediate() {
+        var count = 0
+        text.enumerateSubstrings(in: text.startIndex..<text.endIndex,
+                                 options: .byWords) { _, _, _, _ in
+            count += 1
+        }
+        
+        // Directly update on main thread without delay
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.wordCount != count {
                 self.wordCount = count
+                // Explicitly notify observers
+                self.objectWillChange.send()
+                
+                // Notify specifically about word count updates
+                NotificationCenter.default.post(
+                    name: .documentStateDidChange,
+                    object: self,
+                    userInfo: ["propertyChanged": "wordCount"]
+                )
             }
+        }
+    }
+    
+    // Keep original method for backward compatibility
+    private func updateWordCount() {
+        // Cancel any pending updates
+        wordCountTimer?.invalidate()
+        
+        // First update immediately for responsive UI
+        updateWordCountImmediate()
+        
+        // If needed, schedule a more thorough analysis
+        wordCountTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            // This is now redundant but kept for backward compatibility
+            self?.updateWordCountImmediate()
         }
     }
     
@@ -165,8 +206,8 @@ class Document: ObservableObject, Identifiable {
             performHighlighting()
         } else {
             // Debounced highlighting for larger files
-            highlightTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { _ in
-                self.performHighlighting()
+            highlightTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+                self?.performHighlighting()
             }
         }
     }
@@ -174,12 +215,16 @@ class Document: ObservableObject, Identifiable {
     private func performHighlighting() {
         guard let highlighter = self.highlighter else { return }
         
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
             let highlighted = highlighter.highlight(self.text)
             DispatchQueue.main.async {
                 // Syntax highlighting updates don't need to be part of undo stack
                 // as they're automatically reapplied when text changes
                 self.attributedText = highlighted
+                
+                // Force UI refresh
+                self.objectWillChange.send()
             }
         }
     }

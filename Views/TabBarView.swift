@@ -15,8 +15,11 @@ struct TabBarView: View {
                     .environmentObject(appState)
                 }
                 
-                // Add New Tab Button
-                Button(action: { appState.newDocument() }) {
+                // Add New Tab Button - Modified for direct action
+                Button(action: {
+                    // Call directly without dispatch queue wrapping
+                    appState.newDocument()
+                }) {
                     Image(systemName: "plus")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
@@ -53,7 +56,10 @@ struct TabButton: View {
     }
     
     private var closeButton: some View {
-        Button(action: { appState.closeDocument(at: index) }) {
+        Button(action: {
+            // Call directly without dispatch queue wrapping
+            appState.closeDocument(at: index)
+        }) {
             Image(systemName: "xmark")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary.opacity(0.8))
@@ -94,6 +100,7 @@ struct TabButton: View {
         .background(backgroundStyle)
         .overlay(borderStyle)
         .onTapGesture {
+            // Call directly without dispatch queue wrapping
             appState.selectTab(at: index)
         }
     }
@@ -102,7 +109,7 @@ struct TabButton: View {
 // Preview for Xcode development
 #Preview {
     let appState = AppState()
-    tabBarView(appState: appState)
+    return tabBarView(appState: appState)
 }
 
 private func tabBarView(appState: AppState) -> some View {
