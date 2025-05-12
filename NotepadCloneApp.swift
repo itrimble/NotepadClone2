@@ -1,9 +1,26 @@
+//
+//  NotepadCloneApp.swift
+//  NotepadClone2
+//
+//  Created by Ian Trimble on 5/10/25.
+//  Updated by Ian Trimble on 5/12/25.
+//  Version: 2025-05-12
+//
+
 import SwiftUI
 
 @main
 struct NotepadCloneApp: App {
-    @StateObject private var appState = AppState()
+    // Make appState internal so it can be accessed
+    @StateObject var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
+    // Initialize the app and set up AppDelegate's access to AppState
+    init() {
+        // Set the app state in the AppDelegate using the static method
+        // This avoids capturing self in an escaping closure
+        AppDelegate.setAppState(appState)
+    }
     
     var body: some Scene {
         WindowGroup {

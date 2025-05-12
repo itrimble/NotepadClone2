@@ -1,8 +1,31 @@
+//
+//  AppDelegate.swift
+//  NotepadClone2
+//
+//  Created by Ian Trimble on 5/10/25.
+//  Updated by Ian Trimble on 5/12/25.
+//  Version: 2025-05-12
+//
+
 import SwiftUI
 import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    weak var appState: AppState?
+    // Create a shared instance for easier access
+    static let shared = AppDelegate()
+    
+    // Static property to hold the app state
+    private static var _appState: AppState?
+    
+    // Static setter method that doesn't require capturing self
+    static func setAppState(_ appState: AppState) {
+        _appState = appState
+    }
+    
+    // Instance property that accesses the static property
+    var appState: AppState? {
+        return AppDelegate._appState
+    }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disable macOS native tabs for a Notepad++ like experience
@@ -13,10 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let appearance = NSAppearance.currentDrawing()
         NSApp.appearance = appearance
         
-        // Set appState reference from application delegate
-        if let appStateObject = (NSApp.delegate as? NotepadCloneApp)?.appState {
-            self.appState = appStateObject
-        }
+        // No casting needed - we access our app state directly
         
         // Ensure menus are properly set up
         setupApplicationMenus()
