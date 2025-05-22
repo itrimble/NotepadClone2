@@ -8,12 +8,14 @@
 //
 
 import SwiftUI
+import NotepadClone2
 
 @main
 struct NotepadCloneApp: App {
     // Make appState internal so it can be accessed
     @StateObject var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var isAppStateReady = false // Controls ContentView display
     
     // Initialize the app and set up AppDelegate's access to AppState
     init() {
@@ -24,12 +26,25 @@ struct NotepadCloneApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(appState)
-                .onAppear {
-                    // Configure any window properties when content appears
-                    setupWindowConfiguration()
+            Group { // Use a Group to attach the .onAppear
+                if isAppStateReady {
+                    ContentView() // Ensuring this line is clean
+                        .environmentObject(appState)
+                        .onAppear { // This is ContentView's original onAppear
+                            // Configure any window properties when content appears
+                            setupWindowConfiguration()
+                        }
+                } else {
+                    // Show a loading view while AppState initializes
+                    Text("Loading...")
                 }
+            }
+            .onAppear { // This is the moved .onAppear for isAppStateReady
+                // Give AppState.init() a moment to run before showing ContentView
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Adjust delay as needed
+                    self.isAppStateReady = true
+                }
+            }
         }
         .commands {
             // File Menu
@@ -257,7 +272,7 @@ struct NotepadCloneApp: App {
                 .keyboardShortcut("?", modifiers: .command)
             }
         }
-        .windowToolbarStyle(.unified)
+        .windowToolbarStyle(WindowToolbarStyle.unified)
     }
     
     // Configure window to match Notepad++ style
