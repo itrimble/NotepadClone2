@@ -124,8 +124,9 @@ enum AppTheme: String, CaseIterable, Identifiable {
     func syntaxTheme() -> SyntaxTheme {
         switch self {
         case .system:
-            // Determine if we're in dark mode
-            let isDarkMode = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            // Determine if we're in dark mode, with safe fallback
+            let effectiveAppearance = NSApp.effectiveAppearance
+            let isDarkMode = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             return isDarkMode ? SyntaxTheme.dark : SyntaxTheme.default
         case .light:
             return SyntaxTheme.default

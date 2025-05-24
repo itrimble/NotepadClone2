@@ -20,6 +20,22 @@ extension Notification.Name {
     // Window notifications (custom, in addition to AppKit ones)
     static let windowContentDidChange = Notification.Name("WindowContentDidChange")
     
+    // Theme notifications are declared in ThemeConstants.swift
+    
+    // Navigation notifications
+    static let jumpToLine = Notification.Name("JumpToLine")
+    
+    // Text view selection change notification
+    static let textViewSelectionDidChange = Notification.Name("TextViewSelectionDidChange")
+    
+    // Dialog notifications
+    static let showGoToLineDialog = Notification.Name("ShowGoToLineDialog")
+    static let showEncodingMenu = Notification.Name("ShowEncodingMenu")
+    
+    // Code folding notifications
+    static let toggleCodeFold = Notification.Name("ToggleCodeFold")
+    static let codeFoldStateDidChange = Notification.Name("CodeFoldStateDidChange")
+    
     // Helper for posting typed notifications
     static func post(name: Notification.Name, object: Any? = nil, userInfo: [String: Any]? = nil) {
         NotificationCenter.default.post(name: name, object: object, userInfo: userInfo)

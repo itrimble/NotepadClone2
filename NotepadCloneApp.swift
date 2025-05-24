@@ -8,7 +8,7 @@
 //
 
 import SwiftUI
-import NotepadClone2
+// import NotepadClone2
 
 @main
 struct NotepadCloneApp: App {
@@ -17,12 +17,7 @@ struct NotepadCloneApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var isAppStateReady = false // Controls ContentView display
     
-    // Initialize the app and set up AppDelegate's access to AppState
-    init() {
-        // Set the app state in the AppDelegate using the static method
-        // This avoids capturing self in an escaping closure
-        AppDelegate.setAppState(appState)
-    }
+    // We'll set up the AppDelegate connection when the view appears
     
     var body: some Scene {
         WindowGroup {
@@ -40,6 +35,9 @@ struct NotepadCloneApp: App {
                 }
             }
             .onAppear { // This is the moved .onAppear for isAppStateReady
+                // Set up AppDelegate connection now that StateObject is properly initialized
+                AppDelegate.setAppState(appState)
+                
                 // Give AppState.init() a moment to run before showing ContentView
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Adjust delay as needed
                     self.isAppStateReady = true
@@ -160,10 +158,24 @@ struct NotepadCloneApp: App {
                 
                 Divider()
                 
+                Button(action: { appState.showFindInFilesWindow() }) {
+                    Label("Find in Files...", systemImage: "doc.text.magnifyingglass")
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                
+                Divider()
+                
                 Button(action: { appState.showJumpToLinePanel() }) {
                     Label("Jump to Line", systemImage: "arrow.right.to.line")
                 }
                 .keyboardShortcut("l")
+                
+                Divider()
+                
+                Button(action: { appState.autoIndentSelection() }) {
+                    Label("Auto Indent", systemImage: "increase.indent")
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
             }
             
             // Format Menu
@@ -231,6 +243,25 @@ struct NotepadCloneApp: App {
                 Toggle(isOn: $appState.showStatusBar) {
                     Label("Status Bar", systemImage: "rectangle.bottomthird.inset.filled")
                 }
+                
+                Toggle(isOn: $appState.showLineNumbers) {
+                    Label("Line Numbers", systemImage: "number")
+                }
+                .keyboardShortcut("L", modifiers: [.command, .shift])
+                
+                Divider()
+                
+                Toggle(isOn: $appState.splitViewEnabled) {
+                    Label("Split Editor", systemImage: "rectangle.split.2x1")
+                }
+                .keyboardShortcut("\\", modifiers: [.command])
+                
+                if appState.splitViewEnabled {
+                    Button(action: { appState.toggleSplitOrientation() }) {
+                        Label("Toggle Split Direction", systemImage: "arrow.left.arrow.right")
+                    }
+                    .keyboardShortcut("\\", modifiers: [.command, .shift])
+                }
             }
             
             // Tab Selection Keyboard Shortcuts
@@ -272,7 +303,6 @@ struct NotepadCloneApp: App {
                 .keyboardShortcut("?", modifiers: .command)
             }
         }
-        .windowToolbarStyle(WindowToolbarStyle.unified)
     }
     
     // Configure window to match Notepad++ style

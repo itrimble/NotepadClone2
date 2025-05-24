@@ -2,6 +2,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
 
+// Split view orientation
+enum SplitOrientation: String, CaseIterable {
+    case horizontal = "Horizontal"
+    case vertical = "Vertical"
+}
+
 // Custom window delegate to handle window close events
 class CustomWindowDelegate: NSObject, NSWindowDelegate {
     weak var appState: AppState?
@@ -112,6 +118,11 @@ class AppState: ObservableObject {
     @Published var currentTab: Int? = nil
     @Published var showStatusBar = true
     
+    // Split view support
+    @Published var splitViewEnabled = false
+    @Published var splitViewOrientation: SplitOrientation = .horizontal
+    @Published var splitViewTabIndex: Int? = nil // Index of tab shown in split view
+    
     // Theme support
     @Published var appTheme: AppTheme = .system {
         didSet {
@@ -122,6 +133,10 @@ class AppState: ObservableObject {
                 appTheme.save()
                 // Update color scheme based on theme
                 colorScheme = appTheme.colorScheme
+                // Update all documents with the new theme
+                for tab in tabs {
+                    tab.updateTheme(to: appTheme)
+                }
                 // Notify observers
                 objectWillChange.send()
             }
@@ -134,8 +149,14 @@ class AppState: ObservableObject {
     // User preference for tab switching
     @AppStorage("switch_to_new_tab") var switchToNewTab = false // Default: don't switch
     
+    // User preference for showing line numbers
+    @AppStorage("show_line_numbers") var showLineNumbers = true
+    
     // Find Panel Manager
     var findManager: FindPanelManager!
+    
+    // Windows
+    private var findInFilesWindow: NSWindow?
     
     // Auto-save timer
     private var autoSaveTimer: Timer?
@@ -164,6 +185,18 @@ class AppState: ObservableObject {
             return fileName + saveStatus
         }
         return "Notepad Clone"
+    }
+    
+    // MARK: - Dialog Helpers
+    
+    func showGoToLineDialog() {
+        // Post notification to show go to line dialog
+        NotificationCenter.default.post(name: .showGoToLineDialog, object: nil)
+    }
+    
+    func showEncodingMenu() {
+        // Post notification to show encoding menu
+        NotificationCenter.default.post(name: .showEncodingMenu, object: nil)
     }
     
     init() {
@@ -197,6 +230,9 @@ class AppState: ObservableObject {
         
         // Set up window delegate for all windows
         setupWindowDelegates()
+        
+        // Set up code folding notifications
+        setupCodeFoldingHandling()
     }
     
     deinit {
@@ -297,6 +333,11 @@ class AppState: ObservableObject {
         }
         
         tabs = restoredDocs
+        
+        // Update all restored documents with the current theme
+        for tab in tabs {
+            tab.updateTheme(to: appTheme)
+        }
         
         // Restore current tab
         if let savedTabIndex = UserDefaults.standard.value(forKey: "CurrentTabIndex") as? Int,
@@ -414,7 +455,7 @@ class AppState: ObservableObject {
     private func handleDisplayChange() {
         // Refresh any view state that might be affected by display changes
         tabs.forEach { tab in
-            tab.updateTheme()
+            tab.updateTheme(to: appTheme)
         }
     }
     
@@ -464,6 +505,26 @@ class AppState: ObservableObject {
         setupAutoSave()
     }
     
+    // MARK: - Code Folding Management
+    
+    private func setupCodeFoldingHandling() {
+        // Listen for code folding toggle requests
+        NotificationCenter.default.addObserver(
+            forName: .toggleCodeFold,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let region = notification.userInfo?["region"] as? FoldableRegion else { return }
+            
+            // Toggle fold state for the current document
+            if let currentTab = self.currentTab,
+               currentTab >= 0 && currentTab < self.tabs.count {
+                self.tabs[currentTab].toggleFold(for: region)
+            }
+        }
+    }
+    
     // MARK: - Theme Management
     
     // Update the active theme
@@ -498,6 +559,7 @@ class AppState: ObservableObject {
         DispatchQueue.main.async {
             // Create new document
             let newDoc = Document()
+            newDoc.appTheme = self.appTheme
             self.tabs.append(newDoc)
             
             // If this is the first tab, always select it.
@@ -508,6 +570,16 @@ class AppState: ObservableObject {
                 if self.switchToNewTab {
                     self.currentTab = self.tabs.count - 1
                 }
+                // IMPORTANT: Ensure we always have a valid currentTab
+                // If currentTab is nil or beyond bounds, set it to a valid value
+                if self.currentTab == nil || self.currentTab! >= self.tabs.count {
+                    self.currentTab = 0
+                }
+                
+                // DEBUG: Force tab selection to newest tab for debugging
+                // TODO: Remove this once tab selection is working properly
+                print("FORCE SELECTING newest tab: \(self.tabs.count - 1)")
+                self.currentTab = self.tabs.count - 1
             }
             
             // Force UI update
@@ -520,7 +592,7 @@ class AppState: ObservableObject {
             )
             
             // Debug info
-            print("Tab created at \(now), total tabs: \(self.tabs.count)")
+            print("Tab created at \(now), total tabs: \(self.tabs.count), currentTab: \(self.currentTab ?? -1), switchToNewTab: \(self.switchToNewTab)")
         }
     }
     
@@ -531,22 +603,44 @@ class AppState: ObservableObject {
         // Run panel on main thread
         DispatchQueue.main.async {
             guard panel.runModal() == .OK, let url = panel.url else { return }
-            
-            // Check if file is already open
-            if let existingIndex = self.tabs.firstIndex(where: { $0.fileURL == url }) {
-                // Use direct update for responsiveness
-                DispatchQueue.main.async {
-                    self.currentTab = existingIndex
-                    self.objectWillChange.send()
-                }
-                return
+            self.openDocument(from: url)
+        }
+    }
+    
+    /// Opens a document from a given URL
+    /// - Parameter url: The file URL to open
+    /// - Returns: True if the file was opened successfully, false otherwise
+    @discardableResult
+    func openDocument(from url: URL) -> Bool {
+        // Check if file is already open
+        if let existingIndex = tabs.firstIndex(where: { $0.fileURL == url }) {
+            // Switch to existing tab
+            DispatchQueue.main.async {
+                self.currentTab = existingIndex
+                self.objectWillChange.send()
             }
+            return true
+        }
+        
+        do {
+            let newDoc = Document()
+            newDoc.appTheme = self.appTheme
+            newDoc.fileURL = url
             
-            do {
+            // Check file extension to determine how to read
+            let ext = url.pathExtension.lowercased()
+            let plainTextExtensions = ["txt", "js", "jsx", "ts", "tsx", "swift", "py", "sh", "bash", "json", "xml", "html", "css", "md", "log"]
+            
+            if plainTextExtensions.contains(ext) {
+                // Read as plain text
+                let text = try String(contentsOf: url, encoding: .utf8)
+                newDoc.text = text
+                newDoc.attributedText = NSAttributedString(string: text)
+            } else {
+                // Try to read as RTF or other attributed text
                 var documentAttributes: NSDictionary?
                 let content = try NSAttributedString(url: url, options: [:], documentAttributes: &documentAttributes)
                 
-                let newDoc = Document()
                 if content.length == 0 {
                     newDoc.attributedText = NSAttributedString(string: "")
                     newDoc.text = ""
@@ -554,29 +648,42 @@ class AppState: ObservableObject {
                     newDoc.attributedText = content
                     newDoc.text = content.string
                 }
-                newDoc.fileURL = url
-                newDoc.hasUnsavedChanges = false
+            }
+            
+            newDoc.hasUnsavedChanges = false
+            
+            // Use direct update for responsiveness
+            DispatchQueue.main.async {
+                self.tabs.append(newDoc)
+                self.currentTab = self.tabs.count - 1
+                self.objectWillChange.send()
                 
-                // Use direct update for responsiveness
-                DispatchQueue.main.async {
-                    self.tabs.append(newDoc)
-                    self.currentTab = self.tabs.count - 1
-                    self.objectWillChange.send()
-                    
-                    // Post notification
-                    NotificationCenter.default.post(
-                        name: .appStateTabDidChange,
-                        object: self
-                    )
-                }
-                
-            } catch {
+                // Post notification
+                NotificationCenter.default.post(
+                    name: .appStateTabDidChange,
+                    object: self
+                )
+            }
+            
+            return true
+            
+        } catch {
+            DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "Error Opening File"
-                alert.informativeText = error.localizedDescription
+                alert.informativeText = "Failed to open \(url.lastPathComponent): \(error.localizedDescription)"
                 alert.alertStyle = .warning
                 alert.runModal()
             }
+            return false
+        }
+    }
+    
+    /// Opens multiple documents from URLs, useful for drag and drop
+    /// - Parameter urls: Array of file URLs to open
+    func openDocuments(from urls: [URL]) {
+        for url in urls {
+            openDocument(from: url)
         }
     }
     
@@ -838,6 +945,51 @@ class AppState: ObservableObject {
         NSApp.sendAction(#selector(NSText.delete(_:)), to: nil, from: nil)
     }
     
+    // Auto-indent selected text or current line
+    func autoIndentSelection() {
+        guard let currentTab = currentTab,
+              currentTab >= 0 && currentTab < tabs.count else { return }
+        
+        let document = tabs[currentTab]
+        let language = document.language
+        
+        // Get the current text view
+        guard let textView = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
+        
+        let selectedRange = textView.selectedRange()
+        let text = textView.string
+        
+        if selectedRange.length > 0 {
+            // Auto-indent selected text
+            let selectedText = (text as NSString).substring(with: selectedRange)
+            let indentedText = SmartIndenter.autoIndentText(selectedText, language: language)
+            
+            if textView.shouldChangeText(in: selectedRange, replacementString: indentedText) {
+                textView.textStorage?.replaceCharacters(in: selectedRange, with: indentedText)
+                textView.didChangeText()
+                
+                // Update selection to cover the newly indented text
+                let newRange = NSRange(location: selectedRange.location, length: indentedText.count)
+                textView.setSelectedRange(newRange)
+            }
+        } else {
+            // Auto-indent current line
+            let lineRange = (text as NSString).lineRange(for: selectedRange)
+            let lineText = (text as NSString).substring(with: lineRange)
+            let indentedLine = SmartIndenter.autoIndentText(lineText, language: language)
+            
+            if textView.shouldChangeText(in: lineRange, replacementString: indentedLine) {
+                textView.textStorage?.replaceCharacters(in: lineRange, with: indentedLine)
+                textView.didChangeText()
+                
+                // Maintain cursor position relative to line content
+                let originalCursorInLine = selectedRange.location - lineRange.location
+                let newCursorPosition = lineRange.location + min(originalCursorInLine, indentedLine.count)
+                textView.setSelectedRange(NSRange(location: newCursorPosition, length: 0))
+            }
+        }
+    }
+    
     // MARK: - Search Operations
     func showFindPanel() {
         findManager.showFindPanel = true
@@ -866,6 +1018,35 @@ class AppState: ObservableObject {
     }
     
     // MARK: - Additional Search Features
+    func showFindInFilesWindow() {
+        // For now, show a simple alert until FindInFilesView is added to project
+        let alert = NSAlert()
+        alert.messageText = "Find in Files"
+        alert.informativeText = "This feature will search for text across multiple files in a directory."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        
+        // TODO: Once FindInFilesView.swift is added to Xcode project, use this:
+        // let findInFilesView = FindInFilesView()
+        //     .environmentObject(self)
+        //     .frame(minWidth: 600, idealWidth: 800, minHeight: 400, idealHeight: 600)
+        // 
+        // let window = NSWindow(
+        //     contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+        //     styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+        //     backing: .buffered,
+        //     defer: false
+        // )
+        // 
+        // window.center()
+        // window.setFrameAutosaveName("FindInFilesWindow")
+        // window.contentView = NSHostingView(rootView: findInFilesView)
+        // window.title = "Find in Files"
+        // window.makeKeyAndOrderFront(nil)
+        // 
+        // self.findInFilesWindow = window
+    }
+    
     func showJumpToLinePanel() {
         // Present a simple input dialog for line number
         let alert = NSAlert()
@@ -967,5 +1148,31 @@ class AppState: ObservableObject {
                 self.objectWillChange.send()
             }
         }
+    }
+    
+    // MARK: - Split View Management
+    func toggleSplitView() {
+        splitViewEnabled.toggle()
+        if splitViewEnabled && splitViewTabIndex == nil {
+            // Select the next tab for split view, or first tab if only one exists
+            if let currentTab = currentTab {
+                if tabs.count > 1 {
+                    splitViewTabIndex = (currentTab + 1) % tabs.count
+                } else {
+                    splitViewTabIndex = currentTab
+                }
+            }
+        } else if !splitViewEnabled {
+            splitViewTabIndex = nil
+        }
+    }
+    
+    func setSplitViewTab(_ index: Int) {
+        guard index >= 0 && index < tabs.count else { return }
+        splitViewTabIndex = index
+    }
+    
+    func toggleSplitOrientation() {
+        splitViewOrientation = splitViewOrientation == .horizontal ? .vertical : .horizontal
     }
 }

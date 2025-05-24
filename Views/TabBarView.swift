@@ -26,7 +26,7 @@ struct TabBarView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
-                .background(Color.secondary.opacity(0.1))
+                .background(Color(appState.appTheme.tabBarBackgroundColor()))
                 .cornerRadius(4)
                 .padding(.leading, 4)
                 .buttonStyle(PlainButtonStyle())
@@ -34,7 +34,7 @@ struct TabBarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.top, 4)
-        .background(Color.secondary.opacity(0.1))
+        .background(Color(appState.appTheme.tabBarBackgroundColor()))
     }
 }
 
@@ -69,13 +69,13 @@ struct TabButton: View {
     }
     
     private var backgroundStyle: some View {
-        let backgroundColor = isSelected ? Color.accentColor.opacity(0.2) : Color.clear
+        let backgroundColor = isSelected ? Color(appState.appTheme.tabBarSelectedColor()) : Color.clear
         return RoundedRectangle(cornerRadius: 4)
             .fill(backgroundColor)
     }
     
     private var borderStyle: some View {
-        let borderColor = isSelected ? Color.accentColor : Color.clear
+        let borderColor = isSelected ? Color(appState.appTheme.tabBarSelectedColor()) : Color.clear
         let lineWidth: CGFloat = 1
         return RoundedRectangle(cornerRadius: 4)
             .stroke(borderColor, lineWidth: lineWidth)
