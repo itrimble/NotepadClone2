@@ -500,9 +500,14 @@ class AppState: ObservableObject {
             let newDoc = Document()
             self.tabs.append(newDoc)
             
-            // Only switch to the new tab if the preference is enabled
-            if self.switchToNewTab {
-                self.currentTab = self.tabs.count - 1
+            // If this is the first tab, always select it.
+            // Otherwise, honor the switchToNewTab preference.
+            if self.tabs.count == 1 {
+                self.currentTab = 0
+            } else {
+                if self.switchToNewTab {
+                    self.currentTab = self.tabs.count - 1
+                }
             }
             
             // Force UI update
