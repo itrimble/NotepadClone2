@@ -1,5 +1,7 @@
 import SwiftUI
 
+// Note: FileExplorerView should be imported if in separate module
+
 // Helper class to force view refreshes with debouncing
 class RefreshTrigger: ObservableObject {
     @Published var id = UUID()
@@ -27,14 +29,26 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                // Tab Bar - DEBUG: Always show if we have tabs
-                if !appState.tabs.isEmpty {
-                    TabBarView()
+            HStack(spacing: 0) {
+                // File Explorer Sidebar
+                if appState.showFileExplorer {
+                    FileExplorerView()
                         .environmentObject(appState)
+                        .frame(width: 250)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    
+                    Divider()
                 }
                 
-                // Editor Content - either single or split view
+                // Main Content Area
+                VStack(spacing: 0) {
+                    // Tab Bar - DEBUG: Always show if we have tabs
+                    if !appState.tabs.isEmpty {
+                        TabBarView()
+                            .environmentObject(appState)
+                    }
+                    
+                    // Editor Content - either single or split view
                 if appState.splitViewEnabled {
                     // Split view mode
                     GeometryReader { geometry in
@@ -130,7 +144,8 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-            }
+            } // End Main Content VStack
+            } // End HStack
             
             // Find Panel overlay
             if appState.findManager.showFindPanel || appState.findManager.showReplacePanel {
@@ -151,6 +166,7 @@ struct ContentView: View {
         .preferredColorScheme(appState.colorScheme)
         .navigationTitle(appState.windowTitle)
         .animation(.easeInOut(duration: 0.2), value: appState.showStatusBar)
+        .animation(.easeInOut(duration: 0.2), value: appState.showFileExplorer)
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showFindPanel)
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showReplacePanel)
         // Drag and drop support

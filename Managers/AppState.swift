@@ -152,6 +152,9 @@ class AppState: ObservableObject {
     // User preference for showing line numbers
     @AppStorage("show_line_numbers") var showLineNumbers = true
     
+    // User preference for showing file explorer
+    @AppStorage("show_file_explorer") var showFileExplorer = true
+    
     // Find Panel Manager
     var findManager: FindPanelManager!
     

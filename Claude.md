@@ -66,6 +66,24 @@
 
 ## Recent Updates (2025-05-24)
 
+### Debug Logging System Added (Session 2)
+Added comprehensive debug logging to diagnose text input issues:
+- **CustomTextView.swift**: Logs text view lifecycle, first responder status, and all keyboard input attempts
+- **AppDelegate.swift**: System-wide keyboard event monitoring with responder chain tracing
+- **DebugLogger.swift**: Centralized logging utility with in-memory storage and export capabilities
+- **Console Output**: Detailed logs with emojis for easy visual parsing (🔧 setup, ✏️ text changes, 🎹 keyboard input, etc.)
+
+### Critical Bug Fixes (Session 2)
+20. **Color Picker Issue:** ✅ Fixed
+   - Disabled `usesFontPanel` to prevent color picker appearing on launch
+   - No longer interferes with text input focus
+21. **Typing Issue Debugging:** 🔄 In Progress
+   - Added comprehensive logging to trace keyboard events
+   - Monitoring responder chain and text view delegate calls
+   - Tests written but typing still not working
+
+## Recent Updates (2025-05-24)
+
 ### Core Features Implemented ✅
 1. **Search Functionality:** ✅ Fixed - Find/Replace panel now displays as an overlay when triggered from menu
 2. **Theme Implementation:** ✅ Fixed - All UI components now properly use theme colors and update when theme changes

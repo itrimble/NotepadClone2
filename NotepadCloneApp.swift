@@ -249,6 +249,11 @@ struct NotepadCloneApp: App {
                 }
                 .keyboardShortcut("L", modifiers: [.command, .shift])
                 
+                Toggle(isOn: $appState.showFileExplorer) {
+                    Label("File Explorer", systemImage: "folder")
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                
                 Divider()
                 
                 Toggle(isOn: $appState.splitViewEnabled) {

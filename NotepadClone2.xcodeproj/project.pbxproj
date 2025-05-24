@@ -17,6 +17,7 @@
 		3C742E712DD01A0B00CFDBBE /* FindPanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */; };
 		3C742E762DD0289500CFDBBE /* PreferencesWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */; };
 		3CE811732DD173B900D55103 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE811722DD173B000D55103 /* AppDelegate.swift */; };
+		B3FB294F1301403A8E3E0DB1 /* FileExplorerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3FB294F1301403A8E3E0DB0 /* FileExplorerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -50,6 +51,7 @@
 		3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindPanelManager.swift; sourceTree = "<group>"; };
 		3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindows.swift; sourceTree = "<group>"; };
 		3CE811722DD173B000D55103 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		B3FB294F1301403A8E3E0DB0 /* FileExplorerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileExplorerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -127,6 +129,7 @@
 				3C742E5C2DD011EE00CFDBBE /* ContentView.swift */,
 				3C742E622DD0123E00CFDBBE /* StatusBar.swift */,
 				3C742E642DD0128000CFDBBE /* TabBarView.swift */,
+				B3FB294F1301403A8E3E0DB0 /* FileExplorerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -311,6 +314,7 @@
 				3C742E712DD01A0B00CFDBBE /* FindPanelManager.swift in Sources */,
 				3C742E592DD011CA00CFDBBE /* AppState.swift in Sources */,
 				3C742E5F2DD0122800CFDBBE /* Document.swift in Sources */,
+				B3FB294F1301403A8E3E0DB1 /* FileExplorerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -467,11 +471,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CLDQBGZBDU;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -509,11 +513,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CLDQBGZBDU;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
