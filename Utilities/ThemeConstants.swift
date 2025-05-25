@@ -23,6 +23,9 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case notepadPlusPlus = "Notepad++"
     case materialDark = "Notepad++ Material Dark"
     case nord = "Notepad++ Nord"
+    case classicWordProcessor = "Classic WP"
+    case turboPascal = "Turbo Pascal"
+    case aqua = "Aqua"
     
     var id: String { self.rawValue }
     
@@ -31,10 +34,12 @@ enum AppTheme: String, CaseIterable, Identifiable {
         switch self {
         case .light, .notepadPlusPlus:
             return .light
-        case .dark, .materialDark, .nord:
+        case .dark, .materialDark, .nord, .turboPascal:
             return .dark
+        case .classicWordProcessor, .aqua: 
+            return .light 
         case .system:
-            return nil // System will follow system setting
+            return nil 
         }
     }
     
@@ -53,6 +58,12 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return "text.badge.checkmark"
         case .nord:
             return "snow"
+        case .classicWordProcessor:
+            return "doc.richtext.fill"
+        case .turboPascal:
+            return "terminal.fill"
+        case .aqua:
+            return "drop.fill" 
         }
     }
     
@@ -70,9 +81,10 @@ enum AppTheme: String, CaseIterable, Identifiable {
             case .notepadPlusPlus:
                 // Apply Notepad++ like colors - force light mode as base
                 NSApp.appearance = NSAppearance(named: .aqua)
-            case .materialDark, .nord:
-                // Force dark mode for these themes
+            case .materialDark, .nord, .turboPascal: 
                 NSApp.appearance = NSAppearance(named: .darkAqua)
+            case .classicWordProcessor, .aqua: 
+                NSApp.appearance = NSAppearance(named: .aqua)
             }
             
             // Notify all views that the theme has changed
@@ -100,6 +112,12 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return NSColor(hex: "#263238")
         case .nord:
             return NSColor(hex: "#2E3440")
+        case .classicWordProcessor:
+            return NSColor(srgbRed: 0.0, green: 0.0, blue: 0.4, alpha: 1.0) // Deep blue for Classic WP
+        case .turboPascal:
+            return NSColor(srgbRed: 0.0, green: 0.0, blue: 0.502, alpha: 1.0) 
+        case .aqua:
+            return NSColor(srgbRed: 0.92, green: 0.95, blue: 0.98, alpha: 1.0) 
         }
     }
     
@@ -117,6 +135,12 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return NSColor(hex: "#ECEFF1")
         case .nord:
             return NSColor(hex: "#D8DEE9")
+        case .classicWordProcessor:
+            return NSColor(srgbRed: 0.95, green: 0.95, blue: 0.8, alpha: 1.0) // Soft Yellow/Beige for Classic WP
+        case .turboPascal:
+            return NSColor(srgbRed: 1.0, green: 1.0, blue: 0.0, alpha: 1.0) 
+        case .aqua:
+            return NSColor(srgbRed: 0.2, green: 0.2, blue: 0.2, alpha: 1.0) 
         }
     }
     
@@ -132,6 +156,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
             let isDarkMode = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let baseTheme = isDarkMode ? SyntaxTheme.dark : SyntaxTheme.default
             return SyntaxTheme(
+                editorFont: self.editorFont, // Pass editorFont
                 textColor: editorTextColor,
                 keywordColor: baseTheme.keywordColor,
                 stringColor: baseTheme.stringColor,
@@ -147,6 +172,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .light:
             let baseTheme = SyntaxTheme.default
             return SyntaxTheme(
+                editorFont: self.editorFont, // Pass editorFont
                 textColor: editorTextColor,
                 keywordColor: baseTheme.keywordColor,
                 stringColor: baseTheme.stringColor,
@@ -162,6 +188,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dark:
             let baseTheme = SyntaxTheme.dark
             return SyntaxTheme(
+                editorFont: self.editorFont, // Pass editorFont
                 textColor: editorTextColor,
                 keywordColor: baseTheme.keywordColor,
                 stringColor: baseTheme.stringColor,
@@ -177,6 +204,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .notepadPlusPlus:
             // Create an authentic Notepad++ classic theme
             return SyntaxTheme(
+                editorFont: self.editorFont, // Pass editorFont
                 textColor: editorTextColor,
                 keywordColor: NSColor(hex: "#0000FF"),    // Vivid blue for keywords
                 stringColor: NSColor(hex: "#008000"),     // Green for strings
@@ -191,6 +219,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
             )
         case .materialDark:
             return SyntaxTheme(
+                editorFont: self.editorFont, // Pass editorFont
                 textColor: editorTextColor,
                 keywordColor: NSColor(hex: "#80CBC4"),
                 stringColor: NSColor(hex: "#C3E88D"),
@@ -205,6 +234,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
             )
         case .nord:
             return SyntaxTheme(
+                editorFont: self.editorFont, // Pass editorFont
                 textColor: editorTextColor,
                 keywordColor: NSColor(hex: "#81A1C1"),
                 stringColor: NSColor(hex: "#A3BE8C"),
@@ -217,6 +247,66 @@ enum AppTheme: String, CaseIterable, Identifiable {
                 annotationColor: NSColor(hex: "#5E81AC"),
                 regexColor: NSColor(hex: "#EBCB8B")
             )
+        case .classicWordProcessor:
+            let mainTextColor = self.editorTextColor()
+            return SyntaxTheme(
+                editorFont: self.editorFont, // Pass editorFont
+                textColor: mainTextColor, // Soft Yellow/Beige
+                keywordColor: NSColor(srgbRed: 0.8, green: 1.0, blue: 0.8, alpha: 1.0), // Light Mint
+                stringColor: NSColor(srgbRed: 1.0, green: 0.85, blue: 0.85, alpha: 1.0),  // Light Pink
+                commentColor: NSColor(srgbRed: 0.7, green: 0.7, blue: 0.5, alpha: 1.0), // Muted Yellow/Gray
+                numberColor: NSColor(srgbRed: 0.85, green: 0.85, blue: 1.0, alpha: 1.0),  // Light Lavender
+                variableColor: mainTextColor, // Default to main text color
+                pathColor: NSColor(srgbRed: 1.0, green: 1.0, blue: 0.85, alpha: 1.0), // Soft Yellow
+                functionColor: NSColor(srgbRed: 0.85, green: 1.0, blue: 1.0, alpha: 1.0), // Light Cyan
+                typeColor: NSColor(srgbRed: 0.8, green: 1.0, blue: 0.8, alpha: 1.0), // Light Mint
+                annotationColor: NSColor(srgbRed: 1.0, green: 0.8, blue: 1.0, alpha: 1.0), // Light Magenta
+                regexColor: NSColor(srgbRed: 1.0, green: 0.85, blue: 0.85, alpha: 1.0)  // Light Pink
+            )
+        case .turboPascal:
+            return SyntaxTheme(
+                editorFont: self.editorFont, // Bright Yellow
+                textColor: self.editorTextColor(), 
+                keywordColor: NSColor(srgbRed: 0.0, green: 1.0, blue: 1.0, alpha: 1.0), // Cyan
+                stringColor: NSColor.white,
+                commentColor: NSColor.gray,
+                numberColor: NSColor.white,
+                variableColor: NSColor(srgbRed: 0.85, green: 0.85, blue: 0.85, alpha: 1.0), // Light Gray
+                pathColor: self.editorTextColor(), // Bright Yellow
+                functionColor: self.editorTextColor(), // Bright Yellow for function names
+                typeColor: NSColor(srgbRed: 0.0, green: 1.0, blue: 1.0, alpha: 1.0), // Cyan for types
+                annotationColor: NSColor.white,
+                regexColor: NSColor.white
+            )
+        case .aqua:
+            return SyntaxTheme(
+                editorFont: self.editorFont, 
+                textColor: self.editorTextColor(), 
+                keywordColor: NSColor(srgbRed: 0.6, green: 0.2, blue: 0.4, alpha: 1.0), 
+                stringColor: NSColor(srgbRed: 0.8, green: 0.2, blue: 0.0, alpha: 1.0),  
+                commentColor: NSColor(srgbRed: 0.0, green: 0.5, blue: 0.0, alpha: 1.0), 
+                numberColor: NSColor(srgbRed: 0.0, green: 0.0, blue: 0.8, alpha: 1.0),  
+                variableColor: NSColor(srgbRed: 0.4, green: 0.2, blue: 0.6, alpha: 1.0), 
+                pathColor: self.editorTextColor(),
+                functionColor: NSColor(srgbRed: 0.1, green: 0.1, blue: 0.6, alpha: 1.0), 
+                typeColor: NSColor(srgbRed: 0.3, green: 0.4, blue: 0.0, alpha: 1.0), 
+                annotationColor: NSColor(srgbRed: 0.5, green: 0.3, blue: 0.0, alpha: 1.0), 
+                regexColor: NSColor(srgbRed: 0.8, green: 0.2, blue: 0.0, alpha: 1.0)
+            )
+        }
+    }
+
+    // Editor Font property
+    var editorFont: NSFont {
+        switch self {
+        case .classicWordProcessor:
+            return NSFont(name: "Courier New", size: 14) ?? NSFont.userFixedPitchFont(ofSize: 14) ?? NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        case .turboPascal:
+            return NSFont(name: "Monaco", size: 14) ?? NSFont.userFixedPitchFont(ofSize: 14) ?? NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        case .aqua:
+            return NSFont.systemFont(ofSize: 13) 
+        default:
+            return NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         }
     }
     
@@ -230,12 +320,17 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dark:
             return Color(white: 0.2)
         case .notepadPlusPlus:
-            // Classic Notepad++ tab bar color
             return Color(NSColor(hex: "#E0E0E0"))
         case .materialDark:
             return Color(NSColor(hex: "#1E272C"))
         case .nord:
             return Color(NSColor(hex: "#252A33"))
+        case .classicWordProcessor:
+            return Color(NSColor(srgbRed: 0.0, green: 0.0, blue: 0.3, alpha: 1.0)) 
+        case .turboPascal:
+            return Color(NSColor(srgbRed: 0.0, green: 0.0, blue: 0.2, alpha: 1.0)) 
+        case .aqua:
+            return Color(NSColor(srgbRed: 0.9, green: 0.9, blue: 0.92, alpha: 1.0)) 
         }
     }
     
@@ -248,12 +343,17 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dark:
             return Color.blue.opacity(0.3)
         case .notepadPlusPlus:
-            // Authentic Notepad++ tab selection color
             return Color(NSColor(hex: "#CCE8FF"))
         case .materialDark:
             return Color(NSColor(hex: "#314549"))
         case .nord:
             return Color(NSColor(hex: "#3B4252"))
+        case .classicWordProcessor:
+            return Color(NSColor(srgbRed: 0.1, green: 0.1, blue: 0.5, alpha: 1.0)) 
+        case .turboPascal:
+            return Color(NSColor(srgbRed: 0.1, green: 0.1, blue: 0.4, alpha: 1.0)) 
+        case .aqua:
+            return Color(NSColor(srgbRed: 0.75, green: 0.85, blue: 0.95, alpha: 1.0)) 
         }
     }
     

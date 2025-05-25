@@ -164,14 +164,22 @@ class AppState: ObservableObject {
     // Find Panel Manager
     var findManager: FindPanelManager!
     
+    // AI Settings & Manager
+    @Published var aiSettings: AISettings! // Should be initialized before AIManager
+    @Published var aiManager: AIManager!
+
     // Terminal Manager
     // TODO: Uncomment when Terminal files are added to Xcode project
-    // @Published var terminalManager = TerminalManager()
+    @Published var terminalManager = TerminalManager()
     
     // Markdown Preview
     @Published var showMarkdownPreview = false
     @Published var markdownPreviewMode: MarkdownPreviewMode = .split
     
+    // AI Assistant Panel
+    @Published var showAIAssistantPanel: Bool = false
+    @Published var requestedPreferenceTab: PreferenceTabType? = nil // For opening Preferences to a specific tab
+
     // Windows
     private var findInFilesWindow: NSWindow?
     
@@ -227,6 +235,12 @@ class AppState: ObservableObject {
     }
     
     init() {
+        // Initialize AI Settings first as AIManager depends on it
+        self.aiSettings = AISettings()
+        
+        // Initialize AI Manager
+        self.aiManager = AIManager(aiSettings: self.aiSettings)
+
         // Load saved theme
         self.appTheme = AppTheme.loadSavedTheme()
         
@@ -1065,31 +1079,31 @@ class AppState: ObservableObject {
     // MARK: - Additional Search Features
     func showFindInFilesWindow() {
         // For now, show a simple alert until FindInFilesView is added to project
-        let alert = NSAlert()
-        alert.messageText = "Find in Files"
-        alert.informativeText = "This feature will search for text across multiple files in a directory."
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        // let alert = NSAlert()
+        // alert.messageText = "Find in Files"
+        // alert.informativeText = "This feature will search for text across multiple files in a directory."
+        // alert.addButton(withTitle: "OK")
+        // alert.runModal()
         
         // TODO: Once FindInFilesView.swift is added to Xcode project, use this:
-        // let findInFilesView = FindInFilesView()
-        //     .environmentObject(self)
-        //     .frame(minWidth: 600, idealWidth: 800, minHeight: 400, idealHeight: 600)
-        // 
-        // let window = NSWindow(
-        //     contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
-        //     styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-        //     backing: .buffered,
-        //     defer: false
-        // )
-        // 
-        // window.center()
-        // window.setFrameAutosaveName("FindInFilesWindow")
-        // window.contentView = NSHostingView(rootView: findInFilesView)
-        // window.title = "Find in Files"
-        // window.makeKeyAndOrderFront(nil)
-        // 
-        // self.findInFilesWindow = window
+        let findInFilesView = FindInFilesView()
+            .environmentObject(self)
+            .frame(minWidth: 600, idealWidth: 800, minHeight: 400, idealHeight: 600)
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.center()
+        window.setFrameAutosaveName("FindInFilesWindow")
+        window.contentView = NSHostingView(rootView: findInFilesView)
+        window.title = "Find in Files"
+        window.makeKeyAndOrderFront(nil)
+        
+        self.findInFilesWindow = window
     }
     
     func showJumpToLinePanel() {

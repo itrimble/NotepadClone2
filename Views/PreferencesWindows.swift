@@ -1,30 +1,129 @@
 import SwiftUI
 
+// Define PreferenceTabType here so it's available to AppState and PreferencesWindow
+enum PreferenceTabType: String, CaseIterable, Identifiable {
+    case syntax = "Syntax"
+    case general = "General"
+    case editor = "Editor"
+    case ai = "AI"
+    
+    var id: String { self.rawValue }
+}
+
 struct PreferencesWindow: View {
-    @AppStorage("syntax_theme") private var selectedTheme = "default"
-    @State private var showingCustomTheme = false
+    @EnvironmentObject var appState: AppState // To observe requestedPreferenceTab
+    @State private var selectedTab: PreferenceTabType = .syntax // Default tab
+
+    // Removed AppStorage and State for syntax_theme and showingCustomTheme as they are not used here
     
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             // Syntax Highlighting Tab
             SyntaxPreferencesView()
                 .tabItem {
                     Label("Syntax", systemImage: "paintbrush.fill")
                 }
+                .tag(PreferenceTabType.syntax)
             
             // General Tab
             GeneralPreferencesView()
                 .tabItem {
                     Label("General", systemImage: "gear")
                 }
+                .tag(PreferenceTabType.general)
             
             // Editor Tab
             EditorPreferencesView()
                 .tabItem {
                     Label("Editor", systemImage: "doc.text")
                 }
+                .tag(PreferenceTabType.editor)
+            
+            // AI Settings Tab
+            AISettingsView()
+                .tabItem {
+                    Label("AI", systemImage: "brain.head.profile")
+                }
+                .tag(PreferenceTabType.ai)
         }
         .frame(width: 500, height: 400)
+        .onAppear {
+            if let requestedTab = appState.requestedPreferenceTab {
+                selectedTab = requestedTab
+                appState.requestedPreferenceTab = nil // Reset after setting
+            }
+        }
+    }
+}
+
+struct AISettingsView: View {
+    @StateObject private var aiSettings = AISettings() // Manages its own AISettings instance
+
+    var body: some View {
+        Form {
+            Section(header: Text("Default AI Provider")) {
+                Picker("Default Provider:", selection: $aiSettings.preferredAIProvider) {
+                    ForEach(AIProviderType.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Reset to Default") {
+                        aiSettings.resetPreferredAIProviderToDefault()
+                    }
+                }
+            }
+
+            Section(header: Text("Ollama Configuration")) {
+                TextField("API Endpoint URL:", text: $aiSettings.ollamaEndpointURL)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                TextField("Model Name:", text: $aiSettings.ollamaModelName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                HStack {
+                    Spacer()
+                    Button("Reset Endpoint to Default") {
+                        aiSettings.resetOllamaEndpointURLToDefault()
+                    }
+                    Button("Reset Model to Default") {
+                        aiSettings.resetOllamaModelNameToDefault()
+                    }
+                }
+            }
+
+            Section(header: Text("OpenAI Configuration")) {
+                SecureField("API Key:", text: $aiSettings.openAIAPIKey)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                TextField("Model Name:", text: $aiSettings.openAIModelName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                HStack {
+                    Spacer()
+                    Button("Clear API Key") {
+                        aiSettings.resetOpenAIAPIKey()
+                    }
+                    Button("Reset Model to Default") {
+                        aiSettings.resetOpenAIModelNameToDefault()
+                    }
+                }
+            }
+
+            Section(header: Text("Anthropic Configuration")) {
+                SecureField("API Key:", text: $aiSettings.anthropicAPIKey)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                TextField("Model Name:", text: $aiSettings.anthropicModelName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                HStack {
+                    Spacer()
+                    Button("Clear API Key") {
+                        aiSettings.resetAnthropicAPIKey()
+                    }
+                    Button("Reset Model to Default") {
+                        aiSettings.resetAnthropicModelNameToDefault()
+                    }
+                }
+            }
+        }
+        .padding()
     }
 }
 
@@ -134,13 +233,17 @@ struct SyntaxPreferencesView: View {
     }
     
     private func resetToSystem() {
-        // Replace these lines in PreferencesWindows.swift (around line 120-130)
-        currentKeywordColor = .purple        // Instead of .systemPurple
-        currentStringColor = .green         // Instead of .systemGreen
-        currentCommentColor = .gray         // Instead of .systemGray
-        currentNumberColor = .blue          // Instead of .systemBlue
-        currentVariableColor = .orange      // Instead of .systemOrange
-        currentFunctionColor = .yellow      // Instead of .systemYellow
+        let systemSyntaxTheme = AppTheme.system.syntaxTheme() // Gets appropriate light/dark system theme
+        currentKeywordColor = Color(systemSyntaxTheme.keywordColor)
+        currentStringColor = Color(systemSyntaxTheme.stringColor)
+        currentCommentColor = Color(systemSyntaxTheme.commentColor)
+        currentNumberColor = Color(systemSyntaxTheme.numberColor)
+        currentVariableColor = Color(systemSyntaxTheme.variableColor)
+        // currentFunctionColor is not directly in SyntaxTheme, but can be themed similarly or use a default.
+        // For now, let's use a sensible default that contrasts, or re-evaluate if SyntaxTheme should include it.
+        // Fallback to a default or a color from the theme that makes sense.
+        // Using variableColor as a placeholder if functionColor is not in systemSyntaxTheme.
+        currentFunctionColor = Color(systemSyntaxTheme.functionColor) 
     }
 }
 

@@ -47,9 +47,9 @@ class SyntaxHighlighter {
     }
     
     private let language: Language
-    private let theme: SyntaxTheme
+    private let theme: SyntaxTheme // This now includes editorFont
     
-    init(language: Language, theme: SyntaxTheme = .default) {
+    init(language: Language, theme: SyntaxTheme) { // Removed default for theme to ensure it's always passed
         self.language = language
         self.theme = theme
     }
@@ -57,9 +57,9 @@ class SyntaxHighlighter {
     func highlight(_ text: String) -> NSAttributedString {
         let attributed = NSMutableAttributedString(string: text)
         
-        // Apply base style
+        // Apply base style using theme's font and text color
         let range = NSRange(location: 0, length: text.count)
-        attributed.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular), range: range)
+        attributed.addAttribute(.font, value: theme.editorFont, range: range) // Use theme.editorFont
         attributed.addAttribute(.foregroundColor, value: theme.textColor, range: range)
         
         // Apply syntax highlighting based on language
@@ -82,127 +82,72 @@ class SyntaxHighlighter {
     }
     
     private func highlightSwift(in text: NSMutableAttributedString) {
-        // Keywords
         let keywords = [
             "func", "var", "let", "if", "else", "for", "while", "repeat", "import", "struct", "class", "enum", "protocol", "extension", "return", "private", "public", "internal", "fileprivate", "open", "static", "final", "override", "init", "deinit", "mutating", "associatedtype", "where", "throws", "rethrows", "try", "catch", "guard", "defer", "switch", "case", "default", "break", "continue", "fallthrough", "is", "as", "in", "inout", "indirect", "lazy", "weak", "unowned", "some", "any", "Self", "self", "true", "false", "nil"
         ]
         highlightPattern(in: text, pattern: "\\b(" + keywords.joined(separator: "|") + ")\\b", color: theme.keywordColor)
-        
-        // Strings
         highlightPattern(in: text, pattern: "\"(?:[^\"\\\\]|\\\\.)*\"", color: theme.stringColor)
-        
-        // Comments
         highlightPattern(in: text, pattern: "//.*?$", options: .anchorsMatchLines, color: theme.commentColor)
         highlightPattern(in: text, pattern: "/\\*.*?\\*/", options: .dotMatchesLineSeparators, color: theme.commentColor)
-        
-        // Numbers
         highlightPattern(in: text, pattern: "\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b", color: theme.numberColor)
-        
-        // Annotations
         highlightPattern(in: text, pattern: "@\\w+", color: theme.annotationColor)
-        
-        // Type names (capitalized)
         highlightPattern(in: text, pattern: "\\b[A-Z][a-zA-Z0-9]*\\b", color: theme.typeColor)
     }
     
     private func highlightPython(in text: NSMutableAttributedString) {
-        // Keywords
         let keywords = [
             "def", "class", "if", "else", "elif", "for", "while", "import", "from", "as", "in", "return", "try", "except", "finally", "with", "lambda", "self", "True", "False", "None", "and", "or", "not", "is", "assert", "del", "global", "nonlocal", "raise", "pass", "break", "continue", "yield", "async", "await"
         ]
         highlightPattern(in: text, pattern: "\\b(" + keywords.joined(separator: "|") + ")\\b", color: theme.keywordColor)
-        
-        // Strings (including triple quotes)
         highlightPattern(in: text, pattern: "\"\"\".*?\"\"\"", options: .dotMatchesLineSeparators, color: theme.stringColor)
         highlightPattern(in: text, pattern: "'''.*?'''", options: .dotMatchesLineSeparators, color: theme.stringColor)
         highlightPattern(in: text, pattern: "\"(?:[^\"\\\\]|\\\\.)*\"", color: theme.stringColor)
         highlightPattern(in: text, pattern: "'(?:[^'\\\\]|\\\\.)*'", color: theme.stringColor)
-        
-        // Comments
         highlightPattern(in: text, pattern: "#.*?$", options: .anchorsMatchLines, color: theme.commentColor)
-        
-        // Numbers
         highlightPattern(in: text, pattern: "\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b", color: theme.numberColor)
-        
-        // Decorators
         highlightPattern(in: text, pattern: "@\\w+", color: theme.annotationColor)
-        
-        // Function names
         highlightPattern(in: text, pattern: "def\\s+(\\w+)", color: theme.functionColor)
-        
-        // Class names
         highlightPattern(in: text, pattern: "class\\s+(\\w+)", color: theme.typeColor)
     }
     
     private func highlightBash(in text: NSMutableAttributedString) {
-        // Keywords and built-ins
         let keywords = [
             "if", "then", "fi", "for", "while", "do", "done", "case", "esac", "function", "echo", "exit", "return", "export", "source", "\\.", "set", "unset", "declare", "local", "readonly", "alias", "unalias", "history", "jobs", "kill", "ps", "cd", "pwd", "ls", "cat", "grep", "sed", "awk", "sort", "uniq", "wc", "head", "tail", "find", "xargs", "chmod", "chown", "mkdir", "rmdir", "rm", "cp", "mv", "ln", "touch", "date", "sleep", "read", "test", "\\[", "\\]"
         ]
         highlightPattern(in: text, pattern: "\\b(" + keywords.joined(separator: "|") + ")\\b", color: theme.keywordColor)
-        
-        // Variables
         highlightPattern(in: text, pattern: "\\$\\w+", color: theme.variableColor)
-        highlightPattern(in: text, pattern: "\\$\\{[^}]+\\}", color: theme.variableColor)  // Fixed pattern
-        
-        // Strings
+        highlightPattern(in: text, pattern: "\\$\\{[^}]+\\}", color: theme.variableColor)
         highlightPattern(in: text, pattern: "\"(?:[^\"\\\\]|\\\\.)*\"", color: theme.stringColor)
         highlightPattern(in: text, pattern: "'[^']*'", color: theme.stringColor)
-        
-        // Comments
         highlightPattern(in: text, pattern: "#.*?$", options: .anchorsMatchLines, color: theme.commentColor)
-        
-        // File paths
         highlightPattern(in: text, pattern: "[~/\\.]?[\\w/\\.\\-]+", color: theme.pathColor)
-        
-        // Shebang
         highlightPattern(in: text, pattern: "^#!.*?$", options: .anchorsMatchLines, color: theme.commentColor)
     }
     
     private func highlightAppleScript(in text: NSMutableAttributedString) {
-        // Keywords
         let keywords = [
             "set", "to", "if", "then", "else", "end", "repeat", "while", "until", "times", "tell", "application", "return", "on", "error", "try", "of", "with", "without", "property", "script", "handler", "display", "dialog", "choose", "file", "folder", "activate", "get", "copy", "exists", "make", "new", "every", "whose", "where", "contains", "begins", "ends", "equals", "and", "or", "not", "is", "equal", "true", "false", "missing", "value", "id", "name", "class", "item", "the", "my", "me", "its"
         ]
         highlightPattern(in: text, pattern: "\\b(" + keywords.joined(separator: "|") + ")\\b", options: .caseInsensitive, color: theme.keywordColor)
-        
-        // Strings
         highlightPattern(in: text, pattern: "\"(?:[^\"\\\\]|\\\\.)*\"", color: theme.stringColor)
-        
-        // Comments
         highlightPattern(in: text, pattern: "--.*?$", options: .anchorsMatchLines, color: theme.commentColor)
         highlightPattern(in: text, pattern: "\\(\\*.*?\\*\\)", options: .dotMatchesLineSeparators, color: theme.commentColor)
-        
-        // Numbers
         highlightPattern(in: text, pattern: "\\b\\d+(?:\\.\\d+)?\\b", color: theme.numberColor)
-        
-        // Applications
         highlightPattern(in: text, pattern: "application\\s+\"[^\"]+\"", color: theme.typeColor)
     }
     
     private func highlightJavaScript(in text: NSMutableAttributedString) {
-        // Keywords
         let keywords = [
             "function", "var", "let", "const", "if", "else", "for", "while", "do", "return", "class", "extends", "import", "export", "from", "default", "async", "await", "try", "catch", "finally", "throw", "new", "this", "super", "static", "get", "set", "typeof", "instanceof", "in", "of", "delete", "void", "true", "false", "null", "undefined", "break", "continue", "switch", "case", "default", "debugger", "with", "yield"
         ]
         highlightPattern(in: text, pattern: "\\b(" + keywords.joined(separator: "|") + ")\\b", color: theme.keywordColor)
-        
-        // Strings
-        highlightPattern(in: text, pattern: "`(?:[^`\\\\]|\\\\.)*`", color: theme.stringColor)  // Template literals
+        highlightPattern(in: text, pattern: "`(?:[^`\\\\]|\\\\.)*`", color: theme.stringColor)
         highlightPattern(in: text, pattern: "\"(?:[^\"\\\\]|\\\\.)*\"", color: theme.stringColor)
         highlightPattern(in: text, pattern: "'(?:[^'\\\\]|\\\\.)*'", color: theme.stringColor)
-        
-        // Comments
         highlightPattern(in: text, pattern: "//.*?$", options: .anchorsMatchLines, color: theme.commentColor)
         highlightPattern(in: text, pattern: "/\\*.*?\\*/", options: .dotMatchesLineSeparators, color: theme.commentColor)
-        
-        // Numbers
         highlightPattern(in: text, pattern: "\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b", color: theme.numberColor)
-        
-        // RegExp literals
         highlightPattern(in: text, pattern: "/(?:[^/\\\\]|\\\\.)+/[gimsuxy]*", color: theme.regexColor)
-        
-        // Function names
         highlightPattern(in: text, pattern: "function\\s+(\\w+)", color: theme.functionColor)
     }
     
@@ -224,6 +169,7 @@ class SyntaxHighlighter {
 
 // SyntaxTheme.swift
 struct SyntaxTheme {
+    let editorFont: NSFont // Added font property
     let textColor: NSColor
     let keywordColor: NSColor
     let stringColor: NSColor
@@ -237,20 +183,22 @@ struct SyntaxTheme {
     let regexColor: NSColor
     
     static let `default` = SyntaxTheme(
+        editorFont: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular), // Default font
         textColor: NSColor.black,
-        keywordColor: NSColor(red: 0.52, green: 0.0, blue: 0.67, alpha: 1.0),   // Darker purple
-        stringColor: NSColor(red: 0.0, green: 0.42, blue: 0.0, alpha: 1.0),     // Darker green
-        commentColor: NSColor(red: 0.25, green: 0.25, blue: 0.25, alpha: 1.0),  // Darker gray
-        numberColor: NSColor(red: 0.0, green: 0.0, blue: 0.67, alpha: 1.0),     // Darker blue
-        variableColor: NSColor(red: 0.67, green: 0.22, blue: 0.0, alpha: 1.0),  // Darker orange
-        pathColor: NSColor(red: 0.0, green: 0.35, blue: 0.56, alpha: 1.0),      // Darker teal
-        functionColor: NSColor(red: 0.67, green: 0.28, blue: 0.0, alpha: 1.0),  // Darker brown
-        typeColor: NSColor(red: 0.0, green: 0.45, blue: 0.56, alpha: 1.0),      // Darker cyan
-        annotationColor: NSColor(red: 0.22, green: 0.45, blue: 0.67, alpha: 1.0), // Darker blue-green
-        regexColor: NSColor(red: 0.78, green: 0.0, blue: 0.35, alpha: 1.0)      // Darker pink
+        keywordColor: NSColor(red: 0.52, green: 0.0, blue: 0.67, alpha: 1.0),
+        stringColor: NSColor(red: 0.0, green: 0.42, blue: 0.0, alpha: 1.0),
+        commentColor: NSColor(red: 0.25, green: 0.25, blue: 0.25, alpha: 1.0),
+        numberColor: NSColor(red: 0.0, green: 0.0, blue: 0.67, alpha: 1.0),
+        variableColor: NSColor(red: 0.67, green: 0.22, blue: 0.0, alpha: 1.0),
+        pathColor: NSColor(red: 0.0, green: 0.35, blue: 0.56, alpha: 1.0),
+        functionColor: NSColor(red: 0.67, green: 0.28, blue: 0.0, alpha: 1.0),
+        typeColor: NSColor(red: 0.0, green: 0.45, blue: 0.56, alpha: 1.0),
+        annotationColor: NSColor(red: 0.22, green: 0.45, blue: 0.67, alpha: 1.0),
+        regexColor: NSColor(red: 0.78, green: 0.0, blue: 0.35, alpha: 1.0)
     )
     
     static let dark = SyntaxTheme(
+        editorFont: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular), // Default font
         textColor: NSColor.white,
         keywordColor: NSColor(red: 0.95, green: 0.51, blue: 0.93, alpha: 1.0),
         stringColor: NSColor(red: 0.67, green: 0.82, blue: 0.38, alpha: 1.0),
@@ -264,12 +212,8 @@ struct SyntaxTheme {
         regexColor: NSColor(red: 0.99, green: 0.51, blue: 0.76, alpha: 1.0)
     )
     
-    static func theme(for colorScheme: ColorScheme?) -> SyntaxTheme {
-        switch colorScheme {
-        case .dark:
-            return .dark
-        default:
-            return .default
-        }
+    // This static method is illustrative; actual theme selection happens in AppTheme.syntaxTheme()
+    static func theme(for colorScheme: ColorScheme?, currentAppTheme: AppTheme) -> SyntaxTheme {
+        return currentAppTheme.syntaxTheme() // Delegate to AppTheme instance
     }
 }
