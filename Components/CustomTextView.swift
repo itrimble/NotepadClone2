@@ -60,7 +60,7 @@ struct CustomTextView: NSViewRepresentable {
             lineNumberView.clientView = textView
             lineNumberView.ruleThickness = 60.0  // Wider to accommodate fold controls
             lineNumberView.backgroundColor = NSColor(appTheme.tabBarBackgroundColor())
-            lineNumberView.textColor = appTheme.editorTextColor().withAlphaComponent(0.5)
+            lineNumberView.textColor = appTheme.editorTextColor() // Make base color more solid
             lineNumberView.language = language
             lineNumberView.coordinator = context.coordinator
             scrollView.verticalRulerView = lineNumberView
@@ -118,7 +118,7 @@ struct CustomTextView: NSViewRepresentable {
             nsView.rulersVisible = true
             if let codeRulerView = nsView.verticalRulerView as? CodeFoldingRulerView {
                 codeRulerView.backgroundColor = NSColor(appTheme.tabBarBackgroundColor())
-                codeRulerView.textColor = appTheme.editorTextColor().withAlphaComponent(0.5)
+                codeRulerView.textColor = appTheme.editorTextColor() // Make base color more solid
                 codeRulerView.language = language
                 codeRulerView.needsDisplay = true
             }
@@ -248,8 +248,8 @@ struct CustomTextView: NSViewRepresentable {
             // Update typing attributes
             var attrs = textView.typingAttributes
             attrs[.foregroundColor] = theme.editorTextColor()
-            attrs[.backgroundColor] = theme.editorBackgroundColor()
-            attrs[.font] = NSFont.systemFont(ofSize: 14)
+            // attrs[.backgroundColor] = theme.editorBackgroundColor() // Removed: Let textView.backgroundColor handle background
+            attrs[.font] = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular) // Consistent monospaced font
             textView.typingAttributes = attrs
             
             // Update existing text colors if needed
@@ -258,7 +258,7 @@ struct CustomTextView: NSViewRepresentable {
                 textStorage.addAttribute(.foregroundColor, value: theme.editorTextColor(), range: range)
                 // Also ensure font is set
                 if textStorage.length > 0 && textStorage.attribute(.font, at: 0, effectiveRange: nil) == nil {
-                    textStorage.addAttribute(.font, value: NSFont.systemFont(ofSize: 14), range: range)
+                    textStorage.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular), range: range) // Consistent monospaced font
                 }
             }
         }

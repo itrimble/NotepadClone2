@@ -279,10 +279,10 @@ struct NotepadCloneApp: App {
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 
                 // TODO: Uncomment when Terminal files are added to Xcode project
-                // Toggle(isOn: $appState.terminalManager.showTerminal) {
-                //     Label("Terminal", systemImage: "terminal")
-                // }
-                // .keyboardShortcut("t", modifiers: [.command, .shift])
+                Toggle(isOn: $appState.terminalManager.showTerminal) {
+                    Label("Terminal", systemImage: "terminal")
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
                 
                 Divider()
                 

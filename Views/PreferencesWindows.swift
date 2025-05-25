@@ -134,13 +134,17 @@ struct SyntaxPreferencesView: View {
     }
     
     private func resetToSystem() {
-        // Replace these lines in PreferencesWindows.swift (around line 120-130)
-        currentKeywordColor = .purple        // Instead of .systemPurple
-        currentStringColor = .green         // Instead of .systemGreen
-        currentCommentColor = .gray         // Instead of .systemGray
-        currentNumberColor = .blue          // Instead of .systemBlue
-        currentVariableColor = .orange      // Instead of .systemOrange
-        currentFunctionColor = .yellow      // Instead of .systemYellow
+        let systemSyntaxTheme = AppTheme.system.syntaxTheme() // Gets appropriate light/dark system theme
+        currentKeywordColor = Color(systemSyntaxTheme.keywordColor)
+        currentStringColor = Color(systemSyntaxTheme.stringColor)
+        currentCommentColor = Color(systemSyntaxTheme.commentColor)
+        currentNumberColor = Color(systemSyntaxTheme.numberColor)
+        currentVariableColor = Color(systemSyntaxTheme.variableColor)
+        // currentFunctionColor is not directly in SyntaxTheme, but can be themed similarly or use a default.
+        // For now, let's use a sensible default that contrasts, or re-evaluate if SyntaxTheme should include it.
+        // Fallback to a default or a color from the theme that makes sense.
+        // Using variableColor as a placeholder if functionColor is not in systemSyntaxTheme.
+        currentFunctionColor = Color(systemSyntaxTheme.functionColor) 
     }
 }
 

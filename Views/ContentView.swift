@@ -44,131 +44,30 @@ struct ContentView: View {
                 }
                 
                 // Main Content Area
-                VStack(spacing: 0) {
-                    // Tab Bar - DEBUG: Always show if we have tabs
-                    if !appState.tabs.isEmpty {
-                        TabBarView()
-                            .environmentObject(appState)
-                    }
-                    
-                    // Editor Content - either single or split view
-                    if appState.splitViewEnabled {
-                        // Split view mode
-                        GeometryReader { geometry in
-                            if appState.splitViewOrientation == .horizontal {
-                                HSplitView {
-                                    editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
-                                        .frame(minWidth: 200)
-                                    Divider()
-                                    editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
-                                        .frame(minWidth: 200)
-                                }
-                            } else {
-                                VSplitView {
-                                    editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
-                                        .frame(minHeight: 100)
-                                    Divider()
-                                    editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
-                                        .frame(minHeight: 100)
-                                }
-                            }
-                        }
-                    } else {
-                        // Single editor mode
-                        if let currentIndex = appState.currentTab,
-                           currentIndex >= 0 && currentIndex < appState.tabs.count {
-                            
-                            let currentDocument = appState.tabs[currentIndex]
-                            
-                            // Check if we should show markdown preview
-                            if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
-                                if appState.markdownPreviewMode == .split {
-                                    // Split view with editor and preview
-                                    MarkdownSplitView(
-                                        appState: appState,
-                                        document: currentDocument
-                                    )
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                } else {
-                                    // Preview only mode
-                                    MarkdownPreviewView(
-                                        markdownText: currentDocument.text,
-                                        scrollPosition: .constant(0),
-                                        theme: appState.appTheme.name
-                                    )
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                }
-                            } else {
-                                // Regular text editor
-                                CustomTextView(
-                                    text: $appState.tabs[currentIndex].text,
-                                    attributedText: $appState.tabs[currentIndex].attributedText,
-                                    appTheme: appState.appTheme,
-                                    showLineNumbers: appState.showLineNumbers,
-                                    language: appState.tabs[currentIndex].language,
-                                    document: appState.tabs[currentIndex]
-                                )
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .id("tab_\(currentIndex)_\(currentDocument.id)")
-                                .focusable(true)
-                            }
-                        } else {
-                            // Fallback for invalid tab state
-                            Text("No document selected")
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                    }
-                    
-                    // Status Bar - Common for both single and split view modes
-                    if appState.showStatusBar {
-                        if let currentIndex = appState.currentTab,
-                           currentIndex >= 0 && currentIndex < appState.tabs.count {
-                            let currentDocument = appState.tabs[currentIndex]
-                            StatusBar(
-                                characterCount: currentDocument.text.count,
-                                wordCount: currentDocument.wordCount,
-                                lineNumber: currentDocument.lineNumber,
-                                columnNumber: currentDocument.columnNumber,
-                                selectedRange: currentDocument.selectedRange,
-                                encoding: currentDocument.encoding,
-                                onLineColumnClick: {
-                                    // Show go to line dialog
-                                    appState.showGoToLineDialog()
-                                },
-                                onEncodingClick: {
-                                    // Show encoding selection menu
-                                    appState.showEncodingMenu()
-                                }
-                            )
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            .id("status_\(refreshTrigger.id)")
-                        }
-                    }
-                } // End Main Content VStack
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                mainContentView() // Extracted
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Terminal Panel
                 // TODO: Uncomment when Terminal files are added to Xcode project
-                // if appState.terminalManager.showTerminal {
-                //     if appState.terminalManager.terminalPosition == .bottom {
-                //         Divider()
-                //         TerminalPanelView(terminalManager: appState.terminalManager)
-                //             .frame(height: appState.terminalManager.terminalHeight)
-                //             .transition(.move(edge: .bottom).combined(with: .opacity))
-                //     }
-                // }
+                if appState.terminalManager.showTerminal {
+                    if appState.terminalManager.terminalPosition == .bottom {
+                        Divider()
+                        TerminalPanelView(terminalManager: appState.terminalManager)
+                            .frame(height: appState.terminalManager.terminalHeight)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
             } // End HStack
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Terminal Panel (Right position)
             // TODO: Uncomment when Terminal files are added to Xcode project
-            // if appState.terminalManager.showTerminal && appState.terminalManager.terminalPosition == .right {
-            //     Divider()
-            //     TerminalPanelView(terminalManager: appState.terminalManager)
-            //         .frame(width: 400)
-            //         .transition(.move(edge: .trailing).combined(with: .opacity))
-            // }
+            if appState.terminalManager.showTerminal && appState.terminalManager.terminalPosition == .right {
+                Divider()
+                TerminalPanelView(terminalManager: appState.terminalManager)
+                    .frame(width: appState.terminalManager.terminalWidth) // Using terminalWidth from manager
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
             
             // Find Panel overlay
             if appState.findManager.showFindPanel || appState.findManager.showReplacePanel {
@@ -195,7 +94,7 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showReplacePanel)
         .animation(.easeInOut(duration: 0.2), value: appState.splitViewEnabled)
         // TODO: Uncomment when Terminal files are added to Xcode project
-        // .animation(.easeInOut(duration: 0.2), value: appState.terminalManager.showTerminal)
+        .animation(.easeInOut(duration: 0.2), value: appState.terminalManager.showTerminal)
         // Drag and drop support
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers: providers)
@@ -242,6 +141,127 @@ struct ContentView: View {
         // Cleanup on disappear
         .onDisappear {
             NotificationCenter.default.removeObserver(self)
+        }
+    }
+
+    // MARK: - Extracted ViewBuilder Methods
+
+    @ViewBuilder
+    private func mainContentView() -> some View {
+        VStack(spacing: 0) {
+            // Tab Bar
+            if !appState.tabs.isEmpty {
+                TabBarView()
+                    .environmentObject(appState)
+            }
+
+            // Editor Area
+            editorAreaView()
+
+            // Status Bar
+            if appState.showStatusBar {
+                statusBarView() // Further extraction for clarity
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func editorAreaView() -> some View {
+        if appState.splitViewEnabled {
+            splitEditorView()
+        } else {
+            singleEditorView()
+        }
+    }
+
+    @ViewBuilder
+    private func splitEditorView() -> some View {
+        GeometryReader { geometry in
+            if appState.splitViewOrientation == .horizontal {
+                HSplitView {
+                    editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
+                        .frame(minWidth: 200)
+                    Divider()
+                    editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
+                        .frame(minWidth: 200)
+                }
+            } else {
+                VSplitView {
+                    editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
+                        .frame(minHeight: 100)
+                    Divider()
+                    editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
+                        .frame(minHeight: 100)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func singleEditorView() -> some View {
+        if let currentIndex = appState.currentTab,
+           currentIndex >= 0 && currentIndex < appState.tabs.count {
+            
+            let currentDocument = appState.tabs[currentIndex]
+            
+            if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
+                markdownPreviewOrSplitView(for: currentDocument)
+            } else {
+                CustomTextView(
+                    text: $appState.tabs[currentIndex].text,
+                    attributedText: $appState.tabs[currentIndex].attributedText,
+                    appTheme: appState.appTheme,
+                    showLineNumbers: appState.showLineNumbers,
+                    language: appState.tabs[currentIndex].language,
+                    document: appState.tabs[currentIndex]
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id("tab_\(currentIndex)_\(currentDocument.id)")
+                .focusable(true)
+            }
+        } else {
+            // Fallback for invalid tab state
+            Text("No document selected")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func markdownPreviewOrSplitView(for document: Document) -> some View {
+        if appState.markdownPreviewMode == .split {
+            MarkdownSplitView(
+                appState: appState,
+                document: document
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            MarkdownPreviewView(
+                markdownText: document.text,
+                scrollPosition: .constant(0), // Assuming placeholder or state managed elsewhere
+                theme: appState.appTheme.name
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+    
+    @ViewBuilder
+    private func statusBarView() -> some View {
+        if let currentIndex = appState.currentTab,
+           currentIndex >= 0 && currentIndex < appState.tabs.count {
+            let currentDocument = appState.tabs[currentIndex]
+            StatusBar(
+                characterCount: currentDocument.text.count,
+                wordCount: currentDocument.wordCount,
+                lineNumber: currentDocument.lineNumber,
+                columnNumber: currentDocument.columnNumber,
+                selectedRange: currentDocument.selectedRange,
+                encoding: currentDocument.encoding,
+                onLineColumnClick: { appState.showGoToLineDialog() },
+                onEncodingClick: { appState.showEncodingMenu() }
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .id("status_\(refreshTrigger.id)")
         }
     }
     
@@ -347,10 +367,24 @@ struct ContentView: View {
     // Helper function to create editor pane for split view
     @ViewBuilder
     private func editorPane(for tabIndex: Int?, refreshTrigger: RefreshTrigger) -> some View {
-        if let index = tabIndex,
-           index >= 0 && index < appState.tabs.count {
-            let document = appState.tabs[index]
-            
+        // This check is important to ensure tabIndex is valid
+        guard let index = tabIndex, index >= 0 && index < appState.tabs.count else {
+            return AnyView( // Return an empty or placeholder view if index is invalid
+                VStack {
+                    Spacer()
+                    Text("No document for this pane")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.textBackgroundColor))
+            )
+        }
+        
+        // Use a specific ID for the document to ensure view identity
+        let document = appState.tabs[index]
+        
+        return AnyView(
             VStack(spacing: 0) {
                 // Optional header showing which file is open
                 HStack {
@@ -367,30 +401,21 @@ struct ContentView: View {
                 .background(Color(appState.appTheme.tabBarBackgroundColor()).opacity(0.5))
                 
                 CustomTextView(
-                    text: $appState.tabs[index].text,
-                    attributedText: $appState.tabs[index].attributedText,
+                    text: $appState.tabs[index].text, // Binding directly to the tab's text
+                    attributedText: $appState.tabs[index].attributedText, // Binding for attributed text
                     appTheme: appState.appTheme,
                     showLineNumbers: appState.showLineNumbers,
-                    language: appState.tabs[index].language,
-                    document: appState.tabs[index]
+                    language: document.language, // Use document's language
+                    document: document // Pass the document itself
                 )
-                .id("split_pane_\(index)_\(document.id)")
+                .id("split_pane_\(index)_\(document.id)_\(refreshTrigger.id)") // Ensure unique ID
             }
-        } else {
-            VStack {
-                Spacer()
-                Text("No document selected")
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(NSColor.textBackgroundColor))
-        }
+        )
     }
 }
 
 // Preview for Xcode development
 #Preview {
     ContentView()
-        .environmentObject(AppState())
+        .environmentObject(AppState()) // Ensure AppState is provided for preview
 }
