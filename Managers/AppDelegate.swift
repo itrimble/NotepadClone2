@@ -14,6 +14,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Create a shared instance for easier access
     static let shared = AppDelegate()
     
+    // Event monitor for debugging keyboard input
+    private var eventMonitor: Any?
+    
     // Static property to hold the app state
     private static var _appState: AppState?
     
@@ -41,8 +44,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Ensure menus are properly set up
         setupApplicationMenus()
         
+        // Set up keyboard event monitoring for debugging
+        setupKeyboardMonitoring()
+        
         // Debug log
         print("NotepadClone2 launched with native tabbing disabled")
+        debugLog("🚀 Application launched, keyboard monitoring enabled")
     }
     
     private func setupApplicationMenus() {
@@ -55,14 +62,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // NOTE: Do not call terminate here - it would immediately close the app
     }
     
-    func applicationWillTerminate(_ notification: Notification) {
-        // Final cleanup and state saving when app quits
-        print("NotepadClone2 terminating, saving application state")
-    }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Behave like Notepad++ - quit when the last window is closed
         return true
+    }
+    
+    private func setupKeyboardMonitoring() {
+        // Monitor all keyboard events for debugging
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            debugLog("⌨️ KeyDown event: keyCode=\(event.keyCode), chars='\(event.characters ?? "")', modifiers=\(event.modifierFlags.rawValue)")
+            
+            // Log the responder chain
+            if let window = NSApp.keyWindow {
+                debugLog("🪟 Key window: \(window)")
+                debugLog("🎯 First responder: \(window.firstResponder)")
+                
+                // Trace responder chain
+                var responder: NSResponder? = window.firstResponder
+                var chainDepth = 0
+                while let r = responder, chainDepth < 10 {
+                    debugLog("   📍 Responder[\(chainDepth)]: \(r)")
+                    responder = r.nextResponder
+                    chainDepth += 1
+                }
+            } else {
+                debugLog("⚠️ No key window available")
+            }
+            
+            return event // Pass the event through
+        }
+    }
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        // Clean up event monitor
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        
+        // Final cleanup and state saving when app quits
+        print("NotepadClone2 terminating, saving application state")
+        debugLog("Application terminating")
     }
 }
 

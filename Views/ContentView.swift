@@ -27,6 +27,9 @@ struct ContentView: View {
     // Drag and drop state
     @State private var isDragOver = false
     
+    // Force initial render state
+    @State private var hasAppeared = false
+    
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
@@ -49,29 +52,75 @@ struct ContentView: View {
                     }
                     
                     // Editor Content - either single or split view
-                if appState.splitViewEnabled {
-                    // Split view mode
-                    GeometryReader { geometry in
-                        if appState.splitViewOrientation == .horizontal {
-                            HSplitView {
-                                editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
-                                    .frame(minWidth: 200)
-                                Divider()
-                                editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
-                                    .frame(minWidth: 200)
+                    if appState.splitViewEnabled {
+                        // Split view mode
+                        GeometryReader { geometry in
+                            if appState.splitViewOrientation == .horizontal {
+                                HSplitView {
+                                    editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
+                                        .frame(minWidth: 200)
+                                    Divider()
+                                    editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
+                                        .frame(minWidth: 200)
+                                }
+                            } else {
+                                VSplitView {
+                                    editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
+                                        .frame(minHeight: 100)
+                                    Divider()
+                                    editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
+                                        .frame(minHeight: 100)
+                                }
+                            }
+                        }
+                    } else {
+                        // Single editor mode
+                        if let currentIndex = appState.currentTab,
+                           currentIndex >= 0 && currentIndex < appState.tabs.count {
+                            
+                            let currentDocument = appState.tabs[currentIndex]
+                            
+                            // Check if we should show markdown preview
+                            if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
+                                if appState.markdownPreviewMode == .split {
+                                    // Split view with editor and preview
+                                    MarkdownSplitView(
+                                        appState: appState,
+                                        document: currentDocument
+                                    )
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                } else {
+                                    // Preview only mode
+                                    MarkdownPreviewView(
+                                        markdownText: currentDocument.text,
+                                        scrollPosition: .constant(0),
+                                        theme: appState.appTheme.name
+                                    )
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                }
+                            } else {
+                                // Regular text editor
+                                CustomTextView(
+                                    text: $appState.tabs[currentIndex].text,
+                                    attributedText: $appState.tabs[currentIndex].attributedText,
+                                    appTheme: appState.appTheme,
+                                    showLineNumbers: appState.showLineNumbers,
+                                    language: appState.tabs[currentIndex].language,
+                                    document: appState.tabs[currentIndex]
+                                )
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .id("tab_\(currentIndex)_\(currentDocument.id)")
+                                .focusable(true)
                             }
                         } else {
-                            VSplitView {
-                                editorPane(for: appState.currentTab, refreshTrigger: refreshTrigger)
-                                    .frame(minHeight: 100)
-                                Divider()
-                                editorPane(for: appState.splitViewTabIndex ?? appState.currentTab, refreshTrigger: refreshTrigger)
-                                    .frame(minHeight: 100)
-                            }
+                            // Fallback for invalid tab state
+                            Text("No document selected")
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
                     
-                    // Status Bar with combined stats from both editors
+                    // Status Bar - Common for both single and split view modes
                     if appState.showStatusBar {
                         if let currentIndex = appState.currentTab,
                            currentIndex >= 0 && currentIndex < appState.tabs.count {
@@ -96,56 +145,30 @@ struct ContentView: View {
                             .id("status_\(refreshTrigger.id)")
                         }
                     }
-                } else {
-                    // Single editor mode
-                    if let currentIndex = appState.currentTab,
-                       currentIndex >= 0 && currentIndex < appState.tabs.count {
-                        
-                        let currentDocument = appState.tabs[currentIndex]
-                        
-                        CustomTextView(
-                            text: $appState.tabs[currentIndex].text,
-                            attributedText: $appState.tabs[currentIndex].attributedText,
-                            appTheme: appState.appTheme,
-                            showLineNumbers: appState.showLineNumbers,
-                            language: appState.tabs[currentIndex].language,
-                            document: appState.tabs[currentIndex]
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .id("tab_\(currentIndex)_\(currentDocument.id)")
-                        .focusable(true)
-                        
-                        // Status Bar with Transition
-                        if appState.showStatusBar {
-                            StatusBar(
-                                characterCount: currentDocument.text.count,
-                                wordCount: currentDocument.wordCount,
-                                lineNumber: currentDocument.lineNumber,
-                                columnNumber: currentDocument.columnNumber,
-                                selectedRange: currentDocument.selectedRange,
-                                encoding: currentDocument.encoding,
-                                onLineColumnClick: {
-                                    // Show go to line dialog
-                                    appState.showGoToLineDialog()
-                                },
-                                onEncodingClick: {
-                                    // Show encoding selection menu
-                                    appState.showEncodingMenu()
-                                }
-                            )
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            // Make status bar dependent on refresh trigger
-                            .id("status_\(refreshTrigger.id)")
-                        }
-                    } else {
-                        // Fallback for invalid tab state
-                        Text("No document selected")
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-            } // End Main Content VStack
+                } // End Main Content VStack
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // Terminal Panel
+                // TODO: Uncomment when Terminal files are added to Xcode project
+                // if appState.terminalManager.showTerminal {
+                //     if appState.terminalManager.terminalPosition == .bottom {
+                //         Divider()
+                //         TerminalPanelView(terminalManager: appState.terminalManager)
+                //             .frame(height: appState.terminalManager.terminalHeight)
+                //             .transition(.move(edge: .bottom).combined(with: .opacity))
+                //     }
+                // }
             } // End HStack
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Terminal Panel (Right position)
+            // TODO: Uncomment when Terminal files are added to Xcode project
+            // if appState.terminalManager.showTerminal && appState.terminalManager.terminalPosition == .right {
+            //     Divider()
+            //     TerminalPanelView(terminalManager: appState.terminalManager)
+            //         .frame(width: 400)
+            //         .transition(.move(edge: .trailing).combined(with: .opacity))
+            // }
             
             // Find Panel overlay
             if appState.findManager.showFindPanel || appState.findManager.showReplacePanel {
@@ -163,12 +186,16 @@ struct ContentView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .preferredColorScheme(appState.colorScheme)
         .navigationTitle(appState.windowTitle)
         .animation(.easeInOut(duration: 0.2), value: appState.showStatusBar)
         .animation(.easeInOut(duration: 0.2), value: appState.showFileExplorer)
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showFindPanel)
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showReplacePanel)
+        .animation(.easeInOut(duration: 0.2), value: appState.splitViewEnabled)
+        // TODO: Uncomment when Terminal files are added to Xcode project
+        // .animation(.easeInOut(duration: 0.2), value: appState.terminalManager.showTerminal)
         // Drag and drop support
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers: providers)
@@ -197,9 +224,21 @@ struct ContentView: View {
         .onAppear {
             setupNotificationObservers()
             setupSelectionObserver()
+            
+            print("ContentView onAppear. Initial states: showFileExplorer=\(appState.showFileExplorer), splitViewEnabled=\(appState.splitViewEnabled), tabs.count=\(appState.tabs.count), currentTab=\(String(describing: appState.currentTab))")
+            
+            // Force an immediate refresh on appear
+            refreshTrigger.refresh()
+            
+            // WORKAROUND: Force view to re-render after initial layout
+            if !hasAppeared {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    hasAppeared = true
+                }
+            }
         }
-        // Make view dependent on refresh trigger and theme
-        .id("content_\(refreshTrigger.id)_\(appState.appTheme.rawValue)")
+        // Make view dependent on refresh trigger and relevant state changes
+        .id("contentView_\(refreshTrigger.id)_\(appState.appTheme.rawValue)_\(appState.showFileExplorer)_\(appState.splitViewEnabled)_\(hasAppeared)")
         // Cleanup on disappear
         .onDisappear {
             NotificationCenter.default.removeObserver(self)

@@ -1,5 +1,143 @@
 # NotepadClone2 Changelog
 
+## Version 3.1.0 - 2025-05-24 - Markdown Preview & Terminal (Session 4)
+
+### Added
+- **Markdown Preview System**
+  - Created MarkdownPreviewView.swift using WKWebView for rich rendering
+  - Leverages Apple's swift-markdown package for parsing
+  - Theme-aware styling that adapts to light/dark modes
+  - Custom HTML renderer for complete Markdown AST support
+  - Supports headers, lists, tables, code blocks, images, links, blockquotes
+  - Live preview updates as you type
+
+- **Markdown Split View**
+  - Created MarkdownSplitView.swift for side-by-side editing
+  - Adjustable split ratio with draggable divider
+  - Synchronized scrolling between editor and preview (toggleable)
+  - Visual sync button in header to enable/disable scroll sync
+  - Export functionality for HTML and PDF formats
+  - Export menu with proper file naming and save panels
+
+- **Menu Integration**
+  - Added Markdown Preview toggle to View menu (⇧⌘M)
+  - Preview mode picker: Split View vs Preview Only
+  - Auto-detects markdown files by extension (.md, .markdown, .mdown, .mkd)
+  - Menu items disabled when non-markdown file is active
+
+- **Terminal Implementation** (Files Ready)
+  - Created Terminal.swift model with process lifecycle management
+  - Created TerminalManager.swift for multiple terminal sessions
+  - Created TerminalView.swift using NSViewRepresentable
+  - Created TerminalPanelView.swift with tabbed interface
+  - Support for multiple concurrent terminal sessions
+  - Terminal position options (bottom or right)
+  - Process management with proper cleanup
+  - Environment variable configuration
+  - Note: Files created but not yet added to Xcode project
+
+### Changed
+- **AppState Updates**
+  - Added showMarkdownPreview and markdownPreviewMode properties
+  - Added currentDocumentIsMarkdown computed property
+  - Added MarkdownPreviewMode enum with split/preview options
+
+- **ContentView Updates**
+  - Modified single editor mode to support markdown preview
+  - Integrated MarkdownSplitView and MarkdownPreviewView
+  - Maintains existing split editor functionality
+
+### Technical Details
+- Markdown parsing uses Apple's swift-markdown package (already in dependencies)
+- WebKit integration for preview rendering with custom CSS
+- HTML export generates standalone documents with embedded styles
+- PDF export uses NSPrintOperation with WKWebView
+- Terminal uses Process API with Pipe for I/O handling
+
+## Version 3.0.0 - 2025-05-24 - File Explorer & UI Polish (Session 3)
+
+### Added
+- **File Explorer Sidebar**
+  - Created FileExplorerView.swift with complete file management capabilities
+  - Tree view with expandable/collapsible directories
+  - File icons with type-specific colors
+  - Keyboard shortcut ⇧⌘E to toggle visibility
+  - Theme-aware styling matching app appearance
+
+- **File Operations**
+  - Create new files and folders via context menu
+  - Rename files and folders with validation
+  - Delete files/folders (moves to trash for safety)
+  - Copy file path to clipboard
+  - Reveal in Finder functionality
+  - Automatic file opening after creation
+
+- **Context Menus**
+  - Right-click support for all file operations
+  - Directory-specific options (New File, New Folder)
+  - Visual separators for organized menu structure
+
+- **Menu Enhancements**
+  - Added "Enter Full Screen" to custom View menu
+  - Added Preferences to app menu with ⌘, shortcut
+  - Created openPreferencesWindow() function
+
+### Fixed
+- **Duplicate View Menu Issue**
+  - Removed system View menu conflicts
+  - Consolidated all view options into single custom View menu
+  - Proper menu organization following macOS standards
+
+- **App Initialization**
+  - Fixed "No document selected" blank screen on startup
+  - Ensured at least one tab exists when app launches
+  - Improved session restoration with fallback logic
+  - Added debug logging for initialization sequence
+
+- **Theme Color Consistency**
+  - Fixed syntaxTheme.textColor mismatch with editorTextColor
+  - All themes now use consistent color values
+  - Text visibility fixed across all themes
+
+### Changed
+- **AppState Initialization**
+  - Added safety checks for empty tabs array
+  - Improved newDocument() creation logic
+  - Better debug output for session restoration
+
+### Technical Details
+- FileExplorerView uses SwiftUI with NSViewRepresentable components
+- File operations use FileManager.default for safety
+- Context menus implemented with SwiftUI's contextMenu modifier
+- Tree state managed with @ObservedObject FileSystemItem instances
+
+## 2025-05-24 - Debug Logging Update (Session 2)
+
+### Added
+- **Debug Logging System**
+  - Created DebugLogger.swift - Centralized logging utility with in-memory storage
+  - Added system-wide keyboard event monitoring in AppDelegate.swift
+  - Comprehensive logging in CustomTextView.swift for text input debugging
+  - Visual console output with emoji indicators for easy parsing
+  - Responder chain tracing to diagnose focus issues
+
+### Fixed
+- **Color Picker Issue**
+  - Disabled `usesFontPanel` to prevent color picker appearing on launch
+  - No longer interferes with text input focus
+
+### Changed
+- **Enhanced CustomTextView Debugging**
+  - Added logging for all keyboard input attempts with detailed state
+  - Tracks first responder changes and view lifecycle events
+  - Monitors text delegate callbacks (shouldChangeTextIn, textDidChange)
+  - Logs NSTextView configuration and editability state
+
+### Known Issues
+- Text input still not working despite debug logging implementation
+- Cursor not visible in text editor
+- Need to analyze debug logs to identify root cause
+
 ## 2025-05-24 - Code Intelligence Update
 
 ### Phase 2.6: Code Intelligence Features

@@ -147,6 +147,14 @@ struct FileExplorerView: View {
     @StateObject private var fileManager = FileExplorerManager()
     @EnvironmentObject var appState: AppState
     @State private var contextMenuItem: FileSystemItem?
+    @State private var showingNewFileAlert = false
+    @State private var showingNewFolderAlert = false
+    @State private var showingRenameAlert = false
+    @State private var showingDeleteAlert = false
+    @State private var newItemName = ""
+    @State private var renameItemName = ""
+    @State private var itemToDelete: FileSystemItem?
+    @State private var itemToRename: FileSystemItem?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -193,6 +201,9 @@ struct FileExplorerView: View {
                             appState: appState,
                             onItemSelected: { item in
                                 handleItemSelection(item)
+                            },
+                            onContextMenu: { item in
+                                contextMenuItem = item
                             }
                         )
                     }
@@ -239,6 +250,38 @@ struct FileExplorerView: View {
                 
                 Divider()
                 
+                // File/Folder Creation
+                if item.isDirectory {
+                    Button("New File...") {
+                        contextMenuItem = item
+                        newItemName = ""
+                        showingNewFileAlert = true
+                    }
+                    
+                    Button("New Folder...") {
+                        contextMenuItem = item
+                        newItemName = ""
+                        showingNewFolderAlert = true
+                    }
+                    
+                    Divider()
+                }
+                
+                // Edit Operations
+                Button("Rename...") {
+                    itemToRename = item
+                    renameItemName = item.name
+                    showingRenameAlert = true
+                }
+                
+                Button("Delete") {
+                    itemToDelete = item
+                    showingDeleteAlert = true
+                }
+                .foregroundColor(.red)
+                
+                Divider()
+                
                 Button("Reveal in Finder") {
                     NSWorkspace.shared.selectFile(item.url.path, inFileViewerRootedAtPath: "")
                 }
@@ -256,6 +299,166 @@ struct FileExplorerView: View {
                 fileManager.setRootDirectory(documentsURL)
             }
         }
+        .alert("New File", isPresented: $showingNewFileAlert) {
+            TextField("File name", text: $newItemName)
+            Button("Create") {
+                createNewFile()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Enter a name for the new file")
+        }
+        .alert("New Folder", isPresented: $showingNewFolderAlert) {
+            TextField("Folder name", text: $newItemName)
+            Button("Create") {
+                createNewFolder()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Enter a name for the new folder")
+        }
+        .alert("Rename", isPresented: $showingRenameAlert) {
+            TextField("New name", text: $renameItemName)
+            Button("Rename") {
+                renameItem()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Enter a new name for the item")
+        }
+        .alert("Delete Item", isPresented: $showingDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                deleteItem()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            if let item = itemToDelete {
+                Text("Are you sure you want to delete '\(item.name)'? This action cannot be undone.")
+            }
+        }
+    }
+    
+    // MARK: - File Operations
+    
+    private func createNewFile() {
+        guard let parentItem = contextMenuItem,
+              parentItem.isDirectory,
+              !newItemName.isEmpty else { return }
+        
+        let newFileURL = parentItem.url.appendingPathComponent(newItemName)
+        
+        do {
+            // Create empty file
+            try "".write(to: newFileURL, atomically: true, encoding: .utf8)
+            
+            // Refresh parent directory
+            refreshParent(parentItem)
+            
+            // Open the new file in editor
+            appState.openDocument(from: newFileURL)
+            
+        } catch {
+            print("Error creating file: \(error)")
+            // TODO: Show error alert
+        }
+    }
+    
+    private func createNewFolder() {
+        guard let parentItem = contextMenuItem,
+              parentItem.isDirectory,
+              !newItemName.isEmpty else { return }
+        
+        let newFolderURL = parentItem.url.appendingPathComponent(newItemName)
+        
+        do {
+            try FileManager.default.createDirectory(at: newFolderURL, withIntermediateDirectories: false, attributes: nil)
+            
+            // Refresh parent directory
+            refreshParent(parentItem)
+            
+        } catch {
+            print("Error creating folder: \(error)")
+            // TODO: Show error alert
+        }
+    }
+    
+    private func renameItem() {
+        guard let item = itemToRename,
+              !renameItemName.isEmpty,
+              renameItemName != item.name else { return }
+        
+        let parentURL = item.url.deletingLastPathComponent()
+        let newURL = parentURL.appendingPathComponent(renameItemName)
+        
+        do {
+            try FileManager.default.moveItem(at: item.url, to: newURL)
+            
+            // If this was the currently open document, update its URL
+            if let currentIndex = appState.currentTab,
+               currentIndex < appState.tabs.count,
+               appState.tabs[currentIndex].fileURL == item.url {
+                appState.tabs[currentIndex].fileURL = newURL
+            }
+            
+            // Refresh parent directory
+            if let parent = findParentItem(for: item) {
+                refreshParent(parent)
+            } else {
+                fileManager.refresh()
+            }
+            
+        } catch {
+            print("Error renaming item: \(error)")
+            // TODO: Show error alert
+        }
+    }
+    
+    private func deleteItem() {
+        guard let item = itemToDelete else { return }
+        
+        do {
+            try FileManager.default.trashItem(at: item.url, resultingItemURL: nil)
+            
+            // If this was the currently open document, close it
+            if let currentIndex = appState.currentTab,
+               currentIndex < appState.tabs.count,
+               appState.tabs[currentIndex].fileURL == item.url {
+                appState.closeDocument(at: currentIndex)
+            }
+            
+            // Refresh parent directory
+            if let parent = findParentItem(for: item) {
+                refreshParent(parent)
+            } else {
+                fileManager.refresh()
+            }
+            
+        } catch {
+            print("Error deleting item: \(error)")
+            // TODO: Show error alert
+        }
+    }
+    
+    private func refreshParent(_ parent: FileSystemItem) {
+        parent.isLoaded = false
+        parent.loadChildren()
+    }
+    
+    private func findParentItem(for item: FileSystemItem) -> FileSystemItem? {
+        guard let root = fileManager.rootItem else { return nil }
+        return findParentItem(for: item, in: root)
+    }
+    
+    private func findParentItem(for item: FileSystemItem, in parent: FileSystemItem) -> FileSystemItem? {
+        for child in parent.children {
+            if child.id == item.id {
+                return parent
+            }
+            if child.isDirectory, let found = findParentItem(for: item, in: child) {
+                return found
+            }
+        }
+        return nil
     }
     
     private func handleItemSelection(_ item: FileSystemItem) {
@@ -290,6 +493,7 @@ struct FileTreeItemView: View {
     let fileManager: FileExplorerManager
     let appState: AppState
     let onItemSelected: (FileSystemItem) -> Void
+    let onContextMenu: (FileSystemItem) -> Void
     
     private var indentationWidth: CGFloat {
         CGFloat(level * 16)
@@ -356,6 +560,9 @@ struct FileTreeItemView: View {
                     onItemSelected(item)
                 }
             }
+            .onLongPressGesture(minimumDuration: 0.5) {
+                onContextMenu(item)
+            }
             .frame(height: 22)
             
             // Children (if expanded)
@@ -366,7 +573,8 @@ struct FileTreeItemView: View {
                         level: level + 1,
                         fileManager: fileManager,
                         appState: appState,
-                        onItemSelected: onItemSelected
+                        onItemSelected: onItemSelected,
+                        onContextMenu: onContextMenu
                     )
                 }
             }

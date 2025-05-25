@@ -8,6 +8,12 @@ enum SplitOrientation: String, CaseIterable {
     case vertical = "Vertical"
 }
 
+// Markdown preview mode
+enum MarkdownPreviewMode: String, CaseIterable {
+    case split = "Split View"
+    case preview = "Preview Only"
+}
+
 // Custom window delegate to handle window close events
 class CustomWindowDelegate: NSObject, NSWindowDelegate {
     weak var appState: AppState?
@@ -158,6 +164,14 @@ class AppState: ObservableObject {
     // Find Panel Manager
     var findManager: FindPanelManager!
     
+    // Terminal Manager
+    // TODO: Uncomment when Terminal files are added to Xcode project
+    // @Published var terminalManager = TerminalManager()
+    
+    // Markdown Preview
+    @Published var showMarkdownPreview = false
+    @Published var markdownPreviewMode: MarkdownPreviewMode = .split
+    
     // Windows
     private var findInFilesWindow: NSWindow?
     
@@ -190,6 +204,16 @@ class AppState: ObservableObject {
         return "Notepad Clone"
     }
     
+    var currentDocumentIsMarkdown: Bool {
+        guard let currentTab = currentTab, currentTab < tabs.count else { return false }
+        let doc = tabs[currentTab]
+        if let fileURL = doc.fileURL {
+            let ext = fileURL.pathExtension.lowercased()
+            return ext == "md" || ext == "markdown" || ext == "mdown" || ext == "mkd"
+        }
+        return false
+    }
+    
     // MARK: - Dialog Helpers
     
     func showGoToLineDialog() {
@@ -217,10 +241,28 @@ class AppState: ObservableObject {
         
         // Restore previous session or create new document
         if restoreSession && restorePreviousSession() {
-            print("Session restored successfully")
+            print("Session restored successfully with \(tabs.count) tabs")
         } else {
+            print("No session to restore, creating new document")
             // Create new document if no session to restore
             newDocument()
+        }
+        
+        // Ensure we have at least one tab
+        if tabs.isEmpty {
+            print("Warning: No tabs after initialization, creating default tab")
+            newDocument()
+        }
+        
+        // Ensure currentTab is valid
+        if let current = currentTab {
+            if current >= tabs.count || current < 0 {
+                print("Warning: Invalid currentTab index \(current), resetting to 0")
+                currentTab = tabs.isEmpty ? nil : 0
+            }
+        } else if !tabs.isEmpty {
+            print("No currentTab set, selecting first tab")
+            currentTab = 0
         }
         
         // Set up auto-save timer

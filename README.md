@@ -22,13 +22,24 @@ A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with
 - 🔤 **Smart Indentation** - Language-aware automatic indentation ✅
 - ⌨️ **Auto Indent** - Format code with proper indentation (Cmd+Option+I) ✅
 
+### File Management ✅
+- 📁 **File Explorer** - Built-in project file browser with tree view ✅
+- 🖱️ **File Operations** - Create, rename, and delete files/folders ✅
+- 📋 **Context Menus** - Right-click for file operations ✅
+- 🌳 **Tree Navigation** - Expandable directory structure ✅
+- ⌨️ **Keyboard Toggle** - Show/hide with ⌘⇧E ✅
+
+### Advanced Features ✅
+- 📝 **Markdown Preview** - Live preview with synchronized scrolling ✅
+- 📤 **Markdown Export** - Export to HTML and PDF formats ✅
+- 💻 **Integrated Terminal** - Built-in terminal with multiple sessions (Ready, not integrated)
+
 ### In Development
 - 📍 **Bookmarking** - Mark and navigate important lines
 - 📐 **Column Mode** - Vertical selection and editing
 - 🎬 **Macro Recording** - Record and playback repetitive tasks
 - 🌐 **Advanced Encoding** - Handle multiple file encodings with conversion
 - 🤖 **Auto-completion** - Context-aware code completion
-- 📁 **File Explorer** - Built-in project file browser
 
 ### User Experience ✅
 - ⌨️ **Comprehensive Shortcuts** - Full keyboard navigation ✅
@@ -74,6 +85,28 @@ Unlike ports or Wine-based solutions, NotepadClone2 is:
 
 ![Theme Options](screenshots/themes.png)
 *Multiple built-in themes including Notepad++ classic*
+
+## Latest Updates (v3.1.0 - Markdown Preview & Terminal)
+
+### What's New (May 24, 2025)
+- 📝 **Markdown Preview** - Live preview with split view and synchronized scrolling
+- 📤 **Export Options** - Export markdown to HTML and PDF formats
+- 💻 **Terminal Implementation** - Integrated terminal with process management (files ready)
+- 🔗 **Synchronized Scrolling** - Keep editor and preview in sync
+- 🎨 **Theme-Aware Preview** - Markdown preview adapts to current theme
+
+### Recent Features (v3.0.0)
+- 📁 **File Explorer Sidebar** - Complete file management with tree view
+- 🖱️ **File Operations** - Create, rename, and delete files/folders via context menus
+- 🎨 **Menu System Fix** - Resolved duplicate View menu issue
+- ⚙️ **Preferences** - Added to app menu with ⌘, shortcut
+- 🚀 **App Initialization** - Fixed "No document selected" blank screen issue
+
+### v2.6.0 Features
+- ✅ Code folding with visual controls
+- ✅ Real-time bracket matching
+- ✅ Smart indentation system
+- ✅ Auto-indent command (Cmd+Option+I)
 
 ## Installation
 
@@ -148,8 +181,12 @@ Unlike ports or Wine-based solutions, NotepadClone2 is:
 | Action | Shortcut |
 |--------|----------|
 | Toggle Line Numbers | ⇧⌘L |
+| Toggle File Explorer | ⇧⌘E |
 | Toggle Split View | ⌘\\ |
 | Toggle Split Direction | ⇧⌘\\ |
+| Toggle Markdown Preview | ⇧⌘M |
+| Enter Full Screen | ⌃⌘F |
+| Preferences | ⌘, |
 | Zoom In | ⌘+ |
 | Zoom Out | ⌘- |
 
@@ -159,6 +196,22 @@ Unlike ports or Wine-based solutions, NotepadClone2 is:
 | Switch to Tab 1-9 | ⌘1-9 |
 | Next Tab | ⌘] |
 | Previous Tab | ⌘[ |
+
+### File Explorer
+
+#### Basic Usage
+- Press ⇧⌘E to toggle the file explorer sidebar
+- Click folders to expand/collapse
+- Double-click files to open them in the editor
+- Right-click for context menu options
+
+#### File Operations
+- **New File**: Right-click a folder → New File...
+- **New Folder**: Right-click a folder → New Folder...
+- **Rename**: Right-click any item → Rename...
+- **Delete**: Right-click any item → Delete (moves to trash)
+- **Reveal in Finder**: Right-click → Reveal in Finder
+- **Copy Path**: Right-click → Copy Path
 
 ### Code Intelligence Features
 
@@ -178,6 +231,25 @@ Unlike ports or Wine-based solutions, NotepadClone2 is:
 - Press Enter for automatic indentation based on context
 - Use ⌥⌘I to auto-indent selected text or current line
 - Language-specific rules for Swift, Python, JavaScript, Bash, AppleScript
+
+### Markdown Preview
+
+#### Basic Usage
+- Open any `.md`, `.markdown`, `.mdown`, or `.mkd` file
+- Press ⇧⌘M to toggle markdown preview
+- Choose between Split View or Preview Only modes
+
+#### Preview Features
+- **Live Preview**: Updates as you type
+- **Synchronized Scrolling**: Editor and preview scroll together
+- **Theme Adaptation**: Preview matches your current theme
+- **Export Options**: Export to HTML or PDF via the export menu
+
+#### Export to HTML/PDF
+1. Open a markdown file and enable preview
+2. Click the export button (↗) in the preview header
+3. Choose "Export as HTML" or "Export as PDF"
+4. Select destination and save
 
 ### Search & Replace
 
@@ -218,6 +290,28 @@ Files are automatically detected by extension:
 - `.log` - Log file highlighting
 - And many more...
 
+## Troubleshooting
+
+### Debug Logging
+
+The application includes comprehensive debug logging to help diagnose issues:
+
+1. **Console Output**: Look for emoji-prefixed logs in Xcode console:
+   - 🔧 Setup and initialization
+   - ✏️ Text changes
+   - 🎹 Keyboard input
+   - 🎯 First responder status
+   - ⌨️ System-wide keyboard events
+
+2. **Debug Areas**: 
+   - `CustomTextView.swift` - Text view lifecycle and input handling
+   - `AppDelegate.swift` - System keyboard monitoring
+   - `DebugLogger.swift` - Centralized logging utility
+
+3. **Known Issues**:
+   - Text input may not work in some cases (debugging in progress)
+   - If you can't type, check console logs for responder chain issues
+
 ## Architecture
 
 ### Project Structure
@@ -230,9 +324,11 @@ NotepadClone2/
 │   ├── AppState.swift               # Central application state
 │   ├── AppDelegate.swift            # App lifecycle and window restoration
 │   ├── FindPanelManager.swift       # Search and replace functionality
-│   └── FindInFilesManager.swift     # Multi-file search
+│   ├── FindInFilesManager.swift     # Multi-file search
+│   └── TerminalManager.swift        # Terminal session management (ready)
 ├── Models/
-│   └── Document.swift               # Document model with fold state persistence
+│   ├── Document.swift               # Document model with fold state persistence
+│   └── Terminal.swift               # Terminal session model (ready)
 ├── Utilities/
 │   ├── SyntaxHighlighter.swift      # Language syntax highlighting
 │   ├── ThemeConstants.swift         # Theme definitions and colors
@@ -246,7 +342,12 @@ NotepadClone2/
 │   ├── StatusBar.swift              # Enhanced status information
 │   ├── PreferencesWindow.swift      # Settings and preferences
 │   ├── FindInFilesView.swift        # Find in Files UI
-│   └── SplitEditorView.swift        # Split pane editing
+│   ├── SplitEditorView.swift        # Split pane editing
+│   ├── FileExplorerView.swift       # File explorer sidebar with operations
+│   ├── MarkdownPreviewView.swift     # WebKit-based markdown preview
+│   ├── MarkdownSplitView.swift      # Split view for markdown editing
+│   ├── TerminalView.swift           # Terminal emulation (ready)
+│   └── TerminalPanelView.swift      # Terminal panel UI (ready)
 └── Tests/
     ├── FindInFilesTests.swift       # Find in Files test suite
     └── DragDropTests.swift          # Drag & drop test suite
@@ -337,20 +438,21 @@ Enable debug logging by setting the environment variable:
 NOTEPAD_DEBUG=1 open NotepadClone2.app
 ```
 
-## Recent Updates (v2.6.0 - May 24, 2025)
+## Recent Updates (v3.0.0 - May 24, 2025)
 
-### Code Intelligence Features
+### File Explorer & UI Polish
+- ✅ **File Explorer Sidebar**: Complete file management with tree view
+- ✅ **File Operations**: Create, rename, and delete files/folders
+- ✅ **Context Menus**: Right-click for comprehensive file operations
+- ✅ **Menu System Fix**: Resolved duplicate View menu issue
+- ✅ **Preferences**: Added to app menu with standard ⌘, shortcut
+- ✅ **App Initialization**: Fixed blank screen on startup
+
+### Code Intelligence Features (v2.6.0)
 - ✅ **Code Folding**: Collapse/expand functions, classes, and code blocks
 - ✅ **Bracket Matching**: Real-time highlighting of matching brackets
 - ✅ **Smart Indentation**: Language-aware automatic indentation
 - ✅ **Enhanced Ruler View**: Wider gutter with fold controls
-
-### Critical Bug Fixes
-- ✅ Fixed text view initialization - cursor now appears properly
-- ✅ Fixed file loading - plain text files no longer read as RTF
-- ✅ Fixed drag & drop - dropped files now display content correctly
-- ✅ Fixed text visibility - proper font attributes in all themes
-- ✅ Fixed compilation errors and warnings
 
 ### Previous Updates
 - ✅ Fixed search/replace functionality with overlay panel
@@ -363,18 +465,22 @@ NOTEPAD_DEBUG=1 open NotepadClone2.app
 
 ## Known Issues
 
+- [ ] Terminal files need to be added to Xcode project
+- [ ] Markdown preview files need to be added to Xcode project
 - [ ] Find in Files UI requires manual addition to Xcode project
 - [ ] Auto-completion system planned for next release
 - [ ] Some code folding UI files need Xcode integration
 
 ## Roadmap
 
-### Version 2.7.0 (Next)
-- [ ] File explorer sidebar
+### Version 3.2.0 (Next)
+- [ ] Integrate terminal into UI (files ready)
 - [ ] Document map/minimap
 - [ ] Enhanced auto-completion
+- [ ] Drag & drop in file explorer
+- [ ] File watching for external changes
 
-### Version 2.8.0
+### Version 3.3.0
 - [ ] Column mode editing
 - [ ] Multi-cursor support
 - [ ] Bookmarking system

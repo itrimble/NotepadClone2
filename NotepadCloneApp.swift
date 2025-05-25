@@ -38,13 +38,25 @@ struct NotepadCloneApp: App {
                 // Set up AppDelegate connection now that StateObject is properly initialized
                 AppDelegate.setAppState(appState)
                 
-                // Give AppState.init() a moment to run before showing ContentView
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Adjust delay as needed
-                    self.isAppStateReady = true
-                }
+                // Show ContentView immediately - AppState is already initialized
+                self.isAppStateReady = true
             }
         }
+        .defaultSize(width: 1000, height: 700)
         .commands {
+            // Settings/Preferences in the app menu
+            CommandGroup(after: .appInfo) {
+                Divider()
+                Button("Preferences...") {
+                    openPreferencesWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+            
+            // Remove default system View menu items to prevent duplication
+            CommandGroup(replacing: .toolbar) { }
+            CommandGroup(replacing: .sidebar) { }
+            
             // File Menu
             CommandGroup(replacing: .newItem) {
                 Button(action: {
@@ -220,8 +232,20 @@ struct NotepadCloneApp: App {
                 .keyboardShortcut("t", modifiers: [.command, .option])
             }
             
-            // View Menu
+            // View Menu (includes Enter Full Screen from system menu)
             CommandMenu("View") {
+                // Enter Full Screen (moved from system View menu)
+                Button(action: {
+                    if let window = NSApp.mainWindow {
+                        window.toggleFullScreen(nil)
+                    }
+                }) {
+                    Label("Enter Full Screen", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .keyboardShortcut("f", modifiers: [.control, .command])
+                
+                Divider()
+                
                 // Updated to use a single Theme menu
                 Menu("Theme") {
                     ForEach(AppTheme.allCases) { theme in
@@ -254,6 +278,12 @@ struct NotepadCloneApp: App {
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 
+                // TODO: Uncomment when Terminal files are added to Xcode project
+                // Toggle(isOn: $appState.terminalManager.showTerminal) {
+                //     Label("Terminal", systemImage: "terminal")
+                // }
+                // .keyboardShortcut("t", modifiers: [.command, .shift])
+                
                 Divider()
                 
                 Toggle(isOn: $appState.splitViewEnabled) {
@@ -266,6 +296,24 @@ struct NotepadCloneApp: App {
                         Label("Toggle Split Direction", systemImage: "arrow.left.arrow.right")
                     }
                     .keyboardShortcut("\\", modifiers: [.command, .shift])
+                }
+                
+                Divider()
+                
+                // Markdown Preview
+                Toggle(isOn: $appState.showMarkdownPreview) {
+                    Label("Markdown Preview", systemImage: "doc.richtext")
+                }
+                .disabled(!appState.currentDocumentIsMarkdown)
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+                
+                if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
+                    Picker("Preview Mode", selection: $appState.markdownPreviewMode) {
+                        ForEach(MarkdownPreviewMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
                 }
             }
             
@@ -319,6 +367,16 @@ struct NotepadCloneApp: App {
                 window.titleVisibility = .visible
                 window.titlebarAppearsTransparent = false
                 
+                // Set minimum window size
+                window.minSize = NSSize(width: 800, height: 600)
+                
+                // If window is too small, resize it
+                if window.frame.width < 800 || window.frame.height < 600 {
+                    var frame = window.frame
+                    frame.size = NSSize(width: max(800, frame.width), height: max(600, frame.height))
+                    window.setFrame(frame, display: true)
+                }
+                
                 // Set up window restoration using the concrete class
                 window.isRestorable = true
                 window.restorationClass = NotepadWindowRestorer.self
@@ -327,6 +385,19 @@ struct NotepadCloneApp: App {
     }
     
     // MARK: - Helper Methods
+    
+    private func openPreferencesWindow() {
+        let preferencesWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        preferencesWindow.center()
+        preferencesWindow.contentView = NSHostingView(rootView: PreferencesWindow())
+        preferencesWindow.title = "Preferences"
+        preferencesWindow.makeKeyAndOrderFront(nil)
+    }
     
     private func openHelpWindow() {
         // Open built-in help or external documentation

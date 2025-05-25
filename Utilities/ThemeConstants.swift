@@ -122,20 +122,62 @@ enum AppTheme: String, CaseIterable, Identifiable {
     
     // Get syntax highlighting theme
     func syntaxTheme() -> SyntaxTheme {
+        // Get the editor text color for this theme to ensure consistency
+        let editorTextColor = self.editorTextColor()
+        
         switch self {
         case .system:
             // Determine if we're in dark mode, with safe fallback
             let effectiveAppearance = NSApp.effectiveAppearance
             let isDarkMode = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            return isDarkMode ? SyntaxTheme.dark : SyntaxTheme.default
+            let baseTheme = isDarkMode ? SyntaxTheme.dark : SyntaxTheme.default
+            return SyntaxTheme(
+                textColor: editorTextColor,
+                keywordColor: baseTheme.keywordColor,
+                stringColor: baseTheme.stringColor,
+                commentColor: baseTheme.commentColor,
+                numberColor: baseTheme.numberColor,
+                variableColor: baseTheme.variableColor,
+                pathColor: baseTheme.pathColor,
+                functionColor: baseTheme.functionColor,
+                typeColor: baseTheme.typeColor,
+                annotationColor: baseTheme.annotationColor,
+                regexColor: baseTheme.regexColor
+            )
         case .light:
-            return SyntaxTheme.default
+            let baseTheme = SyntaxTheme.default
+            return SyntaxTheme(
+                textColor: editorTextColor,
+                keywordColor: baseTheme.keywordColor,
+                stringColor: baseTheme.stringColor,
+                commentColor: baseTheme.commentColor,
+                numberColor: baseTheme.numberColor,
+                variableColor: baseTheme.variableColor,
+                pathColor: baseTheme.pathColor,
+                functionColor: baseTheme.functionColor,
+                typeColor: baseTheme.typeColor,
+                annotationColor: baseTheme.annotationColor,
+                regexColor: baseTheme.regexColor
+            )
         case .dark:
-            return SyntaxTheme.dark
+            let baseTheme = SyntaxTheme.dark
+            return SyntaxTheme(
+                textColor: editorTextColor,
+                keywordColor: baseTheme.keywordColor,
+                stringColor: baseTheme.stringColor,
+                commentColor: baseTheme.commentColor,
+                numberColor: baseTheme.numberColor,
+                variableColor: baseTheme.variableColor,
+                pathColor: baseTheme.pathColor,
+                functionColor: baseTheme.functionColor,
+                typeColor: baseTheme.typeColor,
+                annotationColor: baseTheme.annotationColor,
+                regexColor: baseTheme.regexColor
+            )
         case .notepadPlusPlus:
             // Create an authentic Notepad++ classic theme
             return SyntaxTheme(
-                textColor: NSColor.black,
+                textColor: editorTextColor,
                 keywordColor: NSColor(hex: "#0000FF"),    // Vivid blue for keywords
                 stringColor: NSColor(hex: "#008000"),     // Green for strings
                 commentColor: NSColor(hex: "#808080"),    // Gray for comments
@@ -149,7 +191,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
             )
         case .materialDark:
             return SyntaxTheme(
-                textColor: NSColor(hex: "#ECEFF1"),
+                textColor: editorTextColor,
                 keywordColor: NSColor(hex: "#80CBC4"),
                 stringColor: NSColor(hex: "#C3E88D"),
                 commentColor: NSColor(hex: "#546E7A"),
@@ -163,7 +205,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
             )
         case .nord:
             return SyntaxTheme(
-                textColor: NSColor(hex: "#D8DEE9"),
+                textColor: editorTextColor,
                 keywordColor: NSColor(hex: "#81A1C1"),
                 stringColor: NSColor(hex: "#A3BE8C"),
                 commentColor: NSColor(hex: "#616E88"),

@@ -30,7 +30,7 @@
 
 ## Conversation History Summary
 
-* **Last conversation summary:** Implemented comprehensive code intelligence features (Phase 2.6) including code folding, bracket matching, and smart indentation. Fixed critical text view initialization issues that prevented typing and file content display. Resolved compilation errors and cleaned up code warnings.
+* **Last conversation summary:** Session 3 (2025-05-24) - Implemented comprehensive file explorer with file operations (create, rename, delete). Fixed duplicate View menu issue by reorganizing menus and adding Preferences to app menu. Resolved app initialization issue where no tabs were created on startup. The file explorer now supports full file management capabilities with context menus.
 
 ## File Descriptions
 
@@ -51,6 +51,9 @@
 * `StatusBar.swift`: Enhanced status bar showing word count, character count, line:column position, selection info, and file encoding.
 * `PreferencesWindow.swift`: Settings interface for the application.
 * `SplitEditorView.swift`: Split pane editor view for side-by-side document editing.
+* `FileExplorerView.swift`: ✨ NEW - File explorer sidebar with tree view, file operations (create, rename, delete), and context menus.
+* `MarkdownPreviewView.swift`: ✨ NEW - WebKit-based markdown preview with theme-aware styling and HTML rendering.
+* `MarkdownSplitView.swift`: ✨ NEW - Split view combining editor and preview with synchronized scrolling and export options.
 
 ### Utilities
 * `SyntaxHighlighter.swift`: Provides syntax highlighting for various programming languages.
@@ -63,6 +66,52 @@
 ### Project Files
 * `NotepadCloneApp.swift`: Main app entry point and menu configuration. Now includes Auto Indent menu item.
 * `NotepadClone2.xcodeproj`: Xcode project file.
+
+## Recent Updates (2025-05-24 Session 4)
+
+### Markdown Preview Implementation ✅
+1. **Markdown Rendering System:**
+   - Created MarkdownPreviewView.swift using WKWebView for rich rendering
+   - Leverages Apple's swift-markdown package for parsing
+   - Theme-aware styling (adapts to light/dark themes)
+   - Custom HTML renderer for Markdown AST
+   - Support for all common markdown elements (headers, lists, tables, code blocks, etc.)
+
+2. **Split Editor for Markdown:**
+   - Created MarkdownSplitView.swift with editor/preview side-by-side
+   - Adjustable split ratio with drag handle
+   - Synchronized scrolling between editor and preview (toggleable)
+   - Export functionality for HTML and PDF formats
+   - Keyboard shortcut: ⌘⇧M to toggle preview
+
+3. **Menu Integration:**
+   - Added Markdown Preview toggle to View menu
+   - Preview mode picker (Split View vs Preview Only)
+   - Auto-detects markdown files by extension (.md, .markdown, .mdown, .mkd)
+   - Disabled when non-markdown file is active
+
+## Recent Updates (2025-05-24 Session 3)
+
+### File Explorer & Menu System Enhancements ✅
+1. **File Explorer Implementation:**
+   - Created FileExplorerView.swift with complete file management
+   - Tree view with expandable directories
+   - File operations: Create, Rename, Delete (with trash support)
+   - Context menus with right-click functionality
+   - Theme-aware styling and icons
+   - Integration with editor for opening files
+   - Keyboard shortcut: ⌘⇧E to toggle visibility
+
+2. **Menu System Reorganization:**
+   - Fixed duplicate View menu issue
+   - Moved "Enter Full Screen" to custom View menu
+   - Added Preferences to app menu (⌘,)
+   - Removed conflicting system menu items
+
+3. **App Initialization Fixes:**
+   - Ensured at least one tab exists on startup
+   - Fixed "No document selected" blank screen issue
+   - Improved session restoration logic with fallback
 
 ## Recent Updates (2025-05-24)
 
@@ -148,7 +197,7 @@ Based on Notepad++ design analysis and current progress, remaining features incl
 * ~~Code folding/unfolding~~ ✅ Completed
 * ~~Bracket matching~~ ✅ Completed
 * ~~Smart indentation~~ ✅ Completed
-* File explorer/project sidebar for project management
+* ~~File explorer/project sidebar~~ ✅ Completed (Phase 3)
 * Document map/minimap for quick navigation
 * Column mode and multi-cursor editing
 * Macro recording and playback system
@@ -171,5 +220,6 @@ Based on Notepad++ design analysis and current progress, remaining features incl
 ## Conversation History / TODO
 
 * Phase 2.6 (Code Intelligence) has been completed
-* Next phase: File explorer/project sidebar implementation
+* Phase 3 (File Explorer) has been completed - basic operations done, drag & drop and file watching remain
+* Next phase: Document map/minimap implementation
 * See `prompt_plan.md` for detailed task tracking

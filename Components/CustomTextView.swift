@@ -11,8 +11,10 @@ struct CustomTextView: NSViewRepresentable {
     let document: Document  // Pass the document directly
     
     func makeNSView(context: Context) -> NSScrollView {
+        print("🔧 CustomTextView.makeNSView - Creating text view")
         let scrollView = NSTextView.scrollableTextView()
         let textView = scrollView.documentView as! NSTextView
+        print("🔧 CustomTextView.makeNSView - ScrollView: \(scrollView), TextView: \(textView)")
         
         // Configure scroll view
         scrollView.hasVerticalScroller = true
@@ -25,6 +27,7 @@ struct CustomTextView: NSViewRepresentable {
         textView.usesFontPanel = false  // Disable font panel to prevent color picker
         textView.allowsUndo = true
         textView.delegate = context.coordinator  // Set delegate after other properties
+        print("🔧 CustomTextView.makeNSView - Delegate set: \(textView.delegate != nil)")
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.textContainerInset = NSSize(width: 10, height: 10)
@@ -32,6 +35,7 @@ struct CustomTextView: NSViewRepresentable {
         // CRITICAL: Make text view editable and visible
         textView.isEditable = true
         textView.isSelectable = true
+        print("🔧 CustomTextView.makeNSView - isEditable: \(textView.isEditable), isSelectable: \(textView.isSelectable)")
         textView.importsGraphics = false
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -77,8 +81,12 @@ struct CustomTextView: NSViewRepresentable {
         // Ensure text container is properly configured
         if let textContainer = textView.textContainer {
             textContainer.widthTracksTextView = true
-            textContainer.containerSize = CGSize(width: scrollView.frame.width, height: CGFloat.greatestFiniteMagnitude)
+            textContainer.containerSize = CGSize(width: max(100, scrollView.frame.width), height: CGFloat.greatestFiniteMagnitude)
         }
+        
+        // Force initial layout
+        textView.needsLayout = true
+        scrollView.needsLayout = true
         
         // Set typing attributes for new text
         textView.typingAttributes = defaultAttributes
@@ -86,15 +94,20 @@ struct CustomTextView: NSViewRepresentable {
         // Make text view the first responder when window is ready
         DispatchQueue.main.async {
             if let window = textView.window {
-                window.makeFirstResponder(textView)
+                let success = window.makeFirstResponder(textView)
+                print("🔧 CustomTextView.makeNSView - First responder attempt: \(success), window: \(window), current first responder: \(window.firstResponder)")
+            } else {
+                print("❌ CustomTextView.makeNSView - No window available for first responder")
             }
         }
         
+        print("✅ CustomTextView.makeNSView - Complete, returning scrollView")
         return scrollView
     }
     
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         let textView = nsView.documentView as! NSTextView
+        print("🔄 CustomTextView.updateNSView - Called, textView: \(textView)")
         
         // Always update theme when view updates
         context.coordinator.updateTheme(textView)
@@ -203,6 +216,7 @@ struct CustomTextView: NSViewRepresentable {
         init(_ parent: CustomTextView) {
             self.parent = parent
             super.init()
+            print("🔧 Coordinator.init - Created coordinator")
             
             // Observe jump to line notifications
             NotificationCenter.default.addObserver(
@@ -250,9 +264,19 @@ struct CustomTextView: NSViewRepresentable {
         }
         
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView,
-                  !isUpdating,
-                  !isBeingRemoved else { return }
+            guard let textView = notification.object as? NSTextView else {
+                print("❌ textDidChange - Not a valid NSTextView")
+                return
+            }
+            guard !isUpdating else {
+                print("⚠️ textDidChange - Blocked: isUpdating = true")
+                return
+            }
+            guard !isBeingRemoved else {
+                print("⚠️ textDidChange - Blocked: isBeingRemoved = true")
+                return
+            }
+            print("✏️ textDidChange - Text changed to: \(textView.string.prefix(50))...")
             
             let currentText = textView.string
             
@@ -294,8 +318,16 @@ struct CustomTextView: NSViewRepresentable {
         }
         
         func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            print("🎹 shouldChangeTextIn - Range: \(affectedCharRange), Replacement: '\(replacementString ?? "nil")', Length: \(replacementString?.count ?? 0)")
+            
+            // Log current state
+            print("   📊 Current state - isUpdating: \(isUpdating), isBeingRemoved: \(isBeingRemoved)")
+            print("   📊 TextView state - isEditable: \(textView.isEditable), window: \(textView.window != nil)")
+            print("   📊 First responder: \(textView.window?.firstResponder == textView)")
+            
             // Prevent changes during updates or when being removed
-            guard !isUpdating && !isBeingRemoved else { 
+            guard !isUpdating && !isBeingRemoved else {
+                print("   ❌ shouldChangeTextIn - BLOCKED: isUpdating=\(isUpdating), isBeingRemoved=\(isBeingRemoved)")
                 return false 
             }
             
@@ -312,6 +344,7 @@ struct CustomTextView: NSViewRepresentable {
                 }
             }
             
+            print("   ✅ shouldChangeTextIn - ALLOWING text change")
             return true
         }
         
