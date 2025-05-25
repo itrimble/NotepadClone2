@@ -24,6 +24,13 @@
 		3C742E762DD0289500CFDBBE /* PreferencesWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */; };
 		3CE811732DD173B900D55103 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE811722DD173B000D55103 /* AppDelegate.swift */; };
 		B3FB294F1301403A8E3E0DB1 /* FileExplorerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3FB294F1301403A8E3E0DB0 /* FileExplorerView.swift */; };
+		A2B2C3D4E5F6A7B8C9D0E1F3 /* MarkdownPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* MarkdownPreviewView.swift */; };
+		A4B2C3D4E5F6A7B8C9D0E1F5 /* MarkdownSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B2C3D4E5F6A7B8C9D0E1F4 /* MarkdownSplitView.swift */; };
+		B2C2D3E4F5A6B7C8D9E0F1A3 /* Terminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F1A2 /* Terminal.swift */; };
+		B4C2D3E4F5A6B7C8D9E0F1A5 /* TerminalManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C2D3E4F5A6B7C8D9E0F1A4 /* TerminalManager.swift */; };
+		B6C2D3E4F5A6B7C8D9E0F1A7 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C2D3E4F5A6B7C8D9E0F1A6 /* TerminalView.swift */; };
+		B8C2D3E4F5A6B7C8D9E0F1A9 /* TerminalPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C2D3E4F5A6B7C8D9E0F1A8 /* TerminalPanelView.swift */; };
+		C2D2E3F4A5B6C7D8E9F0A1B3 /* FindInFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* FindInFilesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +65,13 @@
 		3C742E752DD0288C00CFDBBE /* PreferencesWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindows.swift; sourceTree = "<group>"; };
 		3CE811722DD173B000D55103 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B3FB294F1301403A8E3E0DB0 /* FileExplorerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileExplorerView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* MarkdownPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreviewView.swift; sourceTree = "<group>"; };
+		A3B2C3D4E5F6A7B8C9D0E1F4 /* MarkdownSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSplitView.swift; sourceTree = "<group>"; };
+		B1C2D3E4F5A6B7C8D9E0F1A2 /* Terminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Terminal.swift; sourceTree = "<group>"; };
+		B3C2D3E4F5A6B7C8D9E0F1A4 /* TerminalManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalManager.swift; sourceTree = "<group>"; };
+		B5C2D3E4F5A6B7C8D9E0F1A6 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
+		B7C2D3E4F5A6B7C8D9E0F1A8 /* TerminalPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPanelView.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8E9F0A1B2 /* FindInFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindInFilesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -142,6 +156,11 @@
 				3C742E622DD0123E00CFDBBE /* StatusBar.swift */,
 				3C742E642DD0128000CFDBBE /* TabBarView.swift */,
 				B3FB294F1301403A8E3E0DB0 /* FileExplorerView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* MarkdownPreviewView.swift */,
+				A3B2C3D4E5F6A7B8C9D0E1F4 /* MarkdownSplitView.swift */,
+				B5C2D3E4F5A6B7C8D9E0F1A6 /* TerminalView.swift */,
+				B7C2D3E4F5A6B7C8D9E0F1A8 /* TerminalPanelView.swift */,
+				C1D2E3F4A5B6C7D8E9F0A1B2 /* FindInFilesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -150,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				3C742E5E2DD0121F00CFDBBE /* Document.swift */,
+				B1C2D3E4F5A6B7C8D9E0F1A2 /* Terminal.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -160,6 +180,7 @@
 				3C742E582DD011C100CFDBBE /* AppState.swift */,
 				3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */,
 				3CE811722DD173B000D55103 /* AppDelegate.swift */,
+				B3C2D3E4F5A6B7C8D9E0F1A4 /* TerminalManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -341,6 +362,13 @@
 				3C742E592DD011CA00CFDBBE /* AppState.swift in Sources */,
 				3C742E5F2DD0122800CFDBBE /* Document.swift in Sources */,
 				B3FB294F1301403A8E3E0DB1 /* FileExplorerView.swift in Sources */,
+				A2B2C3D4E5F6A7B8C9D0E1F3 /* MarkdownPreviewView.swift in Sources */,
+				A4B2C3D4E5F6A7B8C9D0E1F5 /* MarkdownSplitView.swift in Sources */,
+				B2C2D3E4F5A6B7C8D9E0F1A3 /* Terminal.swift in Sources */,
+				B4C2D3E4F5A6B7C8D9E0F1A5 /* TerminalManager.swift in Sources */,
+				B6C2D3E4F5A6B7C8D9E0F1A7 /* TerminalView.swift in Sources */,
+				B8C2D3E4F5A6B7C8D9E0F1A9 /* TerminalPanelView.swift in Sources */,
+				C2D2E3F4A5B6C7D8E9F0A1B3 /* FindInFilesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
