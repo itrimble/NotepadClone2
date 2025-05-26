@@ -1,3 +1,33 @@
+## Version 3.1.1 - YYYY-MM-DD - Stability and Bugfix Update
+
+### Fixed
+- **Core Typing Issues:** Addressed bugs in `CustomTextView` related to first responder management, `isUpdating` state flag, and added theme color validation to prevent invisible text.
+- **UI Visibility:** Improved layout priorities for File Explorer and Tab Bar in `ContentView` to prevent them from being hidden or crushed.
+- **Window Restoration:** Simplified window restoration logic in `NotepadCloneApp` by commenting out custom `restorationClass` to help diagnose/fix "two windows opening" issue.
+- **Line Number Visibility:** Added theme color clash detection for the `CodeFoldingRulerView` in `CustomTextView` to ensure line numbers are visible.
+- **Tab Selection Logic:** Corrected tab selection logic in `AppState.newDocument()` by removing debug code that forced selection to the newest tab, fixing issues with opening files from the file explorer.
+- **"Jump to Line" Functionality:** Refactored "Jump to Line" to correctly scroll to the target line and set the cursor position by using `NotificationCenter` to communicate between `AppState` and `CustomTextView.Coordinator`.
+- **`MarkdownSplitView.swift` Build Errors:**
+    - Changed `appState.appTheme.name` to `appState.appTheme.rawValue`.
+    - Added `import WebKit`.
+    - Implemented a placeholder fix for Markdown parsing by using HTML-escaped plain text in `<pre>` tags for export.
+- **`FindInFilesManager.swift` Build Errors & Warnings:**
+    - Removed unused local `results` variable in `performSearch()`.
+    - Corrected max results check to use `self.searchResults.count`.
+    - Ensured `FileManager.DirectoryEnumerator` is fully iterated before use in an async loop by converting to an array.
+- **`TerminalManager.swift` Missing Property:** Added `@Published var terminalWidth: CGFloat = 300` to fix a bug where the right-positioned terminal panel was missing a width definition.
+
+### Changed
+- **Markdown Export Styling:** Refined the placeholder HTML export in `MarkdownSplitView.swift` to be dark-mode aware for better visual consistency.
+- **Session State Robustness:**
+    - `Managers/AppState.swift`: Now saves and restores split view configuration (`splitViewEnabled`, `splitViewOrientation`, `splitViewTabIndex`).
+    - `Models/Document.swift`: Added error logging for JSON serialization/deserialization during session state saving and loading.
+- **Debug Logging:** Added extensive "TYPING_DEBUG:" prefixed logs to `CustomTextView` to aid in diagnosing typing and view lifecycle issues.
+
+### Added
+- **New Themes:** Added definitions for "Aqua," "Turbo Pascal," and "Mac OS 8" themes in `Utilities/ThemeConstants.swift`. Styling for "Turbo Pascal" and "Mac OS 8" are placeholders requiring future refinement.
+- **Terminal Integration:** Integrated previously commented-out Terminal functionality by uncommenting relevant code in `Managers/AppState.swift`, `Views/ContentView.swift`, and `NotepadCloneApp.swift`.
+
 # NotepadClone2 Changelog
 
 ## Version 3.1.0 - 2025-05-24 - Markdown Preview & Terminal (Session 4)

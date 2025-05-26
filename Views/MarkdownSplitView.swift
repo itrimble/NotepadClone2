@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit // Added import for WKWebView
+import Markdown // Added import for Markdown package
 
 struct MarkdownSplitView: View {
     @ObservedObject var appState: AppState
@@ -163,11 +164,7 @@ struct MarkdownSplitView: View {
     }
     
     private func generateHTMLExport() -> String {
-        // TODO: Integrate a proper Markdown parsing library here. Using plain text in <pre> as a placeholder.
-        let escapedMarkdown = document.text
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
+        let markdownDocument = Markdown.Document(parsing: document.text) // Restored Markdown parsing
         
         let isDark = appState.appTheme.rawValue == "Dark" || // Changed .name to .rawValue
                     appState.appTheme.rawValue == "Notepad++ Material Dark" || // Changed .name to .rawValue and updated string
@@ -186,7 +183,7 @@ struct MarkdownSplitView: View {
         </head>
         <body>
             <div class="markdown-body">
-                <pre>\(escapedMarkdown)</pre>
+                \(markdownDocument.renderHTML()) 
             </div>
         </body>
         </html>
@@ -194,8 +191,7 @@ struct MarkdownSplitView: View {
     }
     
     private func getExportStyles(isDark: Bool) -> String {
-        // Similar styles to MarkdownPreviewView but optimized for export
-        return """
+        var styles = """
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
             font-size: 16px;
@@ -234,9 +230,10 @@ struct MarkdownSplitView: View {
             padding: .2em .4em;
             margin: 0;
             font-size: 85%;
-            background-color: #f6f8fa;
+            background-color: #f0f0f0; /* Slightly adjusted light mode for inline code */
             border-radius: 3px;
             font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+            color: #24292e; /* Ensure inline code text color is set for light mode */
         }
         
         pre {
@@ -246,11 +243,13 @@ struct MarkdownSplitView: View {
             line-height: 1.45;
             background-color: #f6f8fa;
             border-radius: 6px;
+            color: #24292e; /* Ensure pre text color is set for light mode */
         }
         
         pre code {
             padding: 0;
             background-color: transparent;
+            color: inherit; /* Inherit color from pre for code within pre */
         }
         
         blockquote {
@@ -315,7 +314,54 @@ struct MarkdownSplitView: View {
             background-color: #e1e4e8;
             border: 0;
         }
-        
+        """
+
+        if isDark {
+            styles += """
+            body {
+                color: #c9d1d9;
+                background-color: #0d1117;
+            }
+            h1, h2 {
+                border-bottom-color: #21262d; /* Darker border for dark mode */
+            }
+            h6 {
+                color: #8b949e; /* Lighter gray for h6 in dark mode */
+            }
+            code {
+                background-color: #22272e; /* Darker background for inline code */
+                color: #c9d1d9; /* Light text for inline code */
+            }
+            pre {
+                background-color: #161b22; /* Dark background for pre */
+                color: #c9d1d9; /* Light text for pre */
+            }
+            blockquote {
+                color: #8b949e; /* Lighter gray for blockquote text */
+                border-left-color: #30363d; /* Darker border for blockquote */
+            }
+            a {
+                color: #58a6ff; /* Brighter blue for links in dark mode */
+            }
+            table th, table td {
+                border: 1px solid #30363d; /* Darker borders for table cells */
+            }
+            table th {
+                background-color: #161b22; /* Darker background for table header */
+            }
+            table tr {
+                background-color: #0d1117; /* Dark background for table rows */
+            }
+            table tr:nth-child(2n) {
+                background-color: #161b22; /* Slightly lighter dark for alternate rows */
+            }
+            hr {
+                background-color: #21262d; /* Darker hr */
+            }
+            """
+        }
+
+        styles += """
         @media print {
             body {
                 background-color: white;
