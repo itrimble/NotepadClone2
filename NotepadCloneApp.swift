@@ -95,6 +95,13 @@ struct NotepadCloneApp: App {
                     Label("Close Tab", systemImage: "xmark")
                 }
                 .keyboardShortcut("w")
+
+                Button(action: {
+                    NSApp.keyWindow?.close()
+                }) {
+                    Label("Close Window", systemImage: "xmark.circle")
+                }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
                 
                 Divider()
                 
@@ -278,6 +285,7 @@ struct NotepadCloneApp: App {
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 
+                // TODO: Uncomment when Terminal files are added to Xcode project
                 Toggle(isOn: $appState.terminalManager.showTerminal) {
                     Label("Terminal", systemImage: "terminal")
                 }
@@ -314,6 +322,33 @@ struct NotepadCloneApp: App {
                     }
                     .pickerStyle(MenuPickerStyle())
                 }
+            }
+
+            // AI Menu (New)
+            CommandMenu("AI") {
+                Button("AI Preferences...") {
+                    appState.requestedPreferenceTab = .ai // Set the desired tab
+                    openPreferencesWindow() 
+                }
+                // This menu item should be enabled now as the functionality is present.
+
+                Divider()
+
+                Toggle(isOn: $appState.showAIAssistantPanel) {
+                     Label("Show AI Assistant Panel", systemImage: "brain.head.profile.fill")
+                }
+                .keyboardShortcut("a", modifiers: [.option, .command])
+
+                // Placeholder for selecting different AI models/services
+                Menu("Select AI Model") {
+                    Button("Ollama (Local)") {}
+                        .disabled(true) // Example, make selectable later
+                    Button("Claude API") {}
+                        .disabled(true)
+                    Button("OpenAI API") {}
+                        .disabled(true)
+                }
+                .disabled(true) // Disable the whole sub-menu for now
             }
             
             // Tab Selection Keyboard Shortcuts
@@ -378,7 +413,7 @@ struct NotepadCloneApp: App {
                 
                 // Set up window restoration using the concrete class
                 window.isRestorable = true
-                // window.restorationClass = NotepadWindowRestorer.self // Commented out for diagnostics
+                window.restorationClass = NotepadWindowRestorer.self
             }
         }
     }
@@ -393,7 +428,8 @@ struct NotepadCloneApp: App {
             defer: false
         )
         preferencesWindow.center()
-        preferencesWindow.contentView = NSHostingView(rootView: PreferencesWindow())
+        // Pass appState to PreferencesWindow if it needs it via EnvironmentObject
+        preferencesWindow.contentView = NSHostingView(rootView: PreferencesWindow().environmentObject(appState))
         preferencesWindow.title = "Preferences"
         preferencesWindow.makeKeyAndOrderFront(nil)
     }

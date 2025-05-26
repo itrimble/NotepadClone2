@@ -38,7 +38,6 @@ struct ContentView: View {
                     FileExplorerView()
                         .environmentObject(appState)
                         .frame(width: 250)
-                        .layoutPriority(1) // Ensure FileExplorerView is not crushed
                         .transition(.move(edge: .leading).combined(with: .opacity))
                     
                     Divider()
@@ -49,6 +48,7 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Terminal Panel
+                // TODO: Uncomment when Terminal files are added to Xcode project
                 if appState.terminalManager.showTerminal {
                     if appState.terminalManager.terminalPosition == .bottom {
                         Divider()
@@ -61,6 +61,7 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Terminal Panel (Right position)
+            // TODO: Uncomment when Terminal files are added to Xcode project
             if appState.terminalManager.showTerminal && appState.terminalManager.terminalPosition == .right {
                 Divider()
                 TerminalPanelView(terminalManager: appState.terminalManager)
@@ -92,7 +93,8 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showFindPanel)
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showReplacePanel)
         .animation(.easeInOut(duration: 0.2), value: appState.splitViewEnabled)
-        .animation(.easeInOut(duration: 0.2), value: appState.terminalManager.showTerminal) 
+        .animation(.easeInOut(duration: 0.2), value: appState.terminalManager.showTerminal)
+        .animation(.easeInOut(duration: 0.2), value: appState.showAIAssistantPanel) // Animation for AI Panel
         // Drag and drop support
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers: providers)
@@ -135,10 +137,40 @@ struct ContentView: View {
             }
         }
         // Make view dependent on refresh trigger and relevant state changes
-        .id("contentView_\(refreshTrigger.id)_\(appState.appTheme.rawValue)_\(appState.showFileExplorer)_\(hasAppeared)") // Temporarily removed _\(appState.splitViewEnabled) for diagnostics
+        .id("contentView_\(refreshTrigger.id)_\(appState.appTheme.rawValue)_\(appState.showFileExplorer)_\(appState.splitViewEnabled)_\(hasAppeared)")
         // Cleanup on disappear
         .onDisappear {
             NotificationCenter.default.removeObserver(self)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Button(action: { appState.newDocument() }) {
+                    Label("New Tab", systemImage: "plus")
+                }
+                Button(action: { appState.openDocument() }) {
+                    Label("Open", systemImage: "folder")
+                }
+                Button(action: { appState.saveDocument() }) {
+                    Label("Save", systemImage: "doc")
+                }
+                // We can add more items like Undo/Redo if desired
+            }
+            ToolbarItemGroup(placement: .automatic) { // Or .navigationBarTrailing, .principal, etc.
+                Picker("AI Provider", selection: $appState.aiManager.currentProviderType) {
+                    ForEach(AIProviderType.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(minWidth: 150) // Give it some space
+
+                // Toggle for AI Assistant Panel
+                Button(action: {
+                    appState.showAIAssistantPanel.toggle()
+                }) {
+                    Label("AI Assistant", systemImage: appState.showAIAssistantPanel ? "brain.head.profile.fill" : "brain.head.profile")
+                }
+            }
         }
     }
 
@@ -151,12 +183,23 @@ struct ContentView: View {
             if !appState.tabs.isEmpty {
                 TabBarView()
                     .environmentObject(appState)
-                    .frame(minHeight: 35) // Ensure TabBarView has a minimum height
-                    .layoutPriority(1)   // Give TabBarView higher layout priority
             }
 
             // Editor Area
             editorAreaView()
+
+            // AI Assistant Panel (collapsible)
+            // Show only if the toggle is on, and use DisclosureGroup for collapsibility
+            if appState.showAIAssistantPanel {
+                DisclosureGroup("AI Assistant", isExpanded: $appState.showAIAssistantPanel) {
+                    AIAssistantPanelView()
+                        .environmentObject(appState.aiManager) // Pass the AIManager
+                        .frame(height: 250) // Give it a default height
+                }
+                .padding(.horizontal)
+                .padding(.bottom, appState.showStatusBar ? 0 : 8) // Add padding if status bar is hidden
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
             // Status Bar
             if appState.showStatusBar {
@@ -257,11 +300,12 @@ struct ContentView: View {
                 columnNumber: currentDocument.columnNumber,
                 selectedRange: currentDocument.selectedRange,
                 encoding: currentDocument.encoding,
+                currentProvider: appState.aiManager.currentProviderType, // Pass the current provider
                 onLineColumnClick: { appState.showGoToLineDialog() },
                 onEncodingClick: { appState.showEncodingMenu() }
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
-            .id("status_\(refreshTrigger.id)")
+            .id("status_\(refreshTrigger.id)_\(appState.aiManager.currentProviderType.rawValue)") // Add provider to ID for refresh
         }
     }
     

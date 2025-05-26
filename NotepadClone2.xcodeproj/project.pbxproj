@@ -31,6 +31,13 @@
 		B6C2D3E4F5A6B7C8D9E0F1A7 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C2D3E4F5A6B7C8D9E0F1A6 /* TerminalView.swift */; };
 		B8C2D3E4F5A6B7C8D9E0F1A9 /* TerminalPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C2D3E4F5A6B7C8D9E0F1A8 /* TerminalPanelView.swift */; };
 		C2D2E3F4A5B6C7D8E9F0A1B3 /* FindInFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* FindInFilesView.swift */; };
+		D2E2F3A4B5C6D7E8F9A0B1C3 /* AIServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6D7E8F9A0B1C2 /* AIServiceProtocol.swift */; };
+		D4E2F3A4B5C6D7E8F9A0B1C5 /* OllamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E2F3A4B5C6D7E8F9A0B1C4 /* OllamaService.swift */; };
+		S2E2R3V4I5C6E7S8O1P2E3N5 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S1E2R3V4I5C6E7S8O1P2E3N4 /* OpenAIService.swift */; };
+		S4E2R3V4I5C6E7S8A1N2T3H5 /* AnthropicService.swift in Sources */ = {isa = PBXBuildFile; fileRef = S3E2R3V4I5C6E7S8A1N2T3H4 /* AnthropicService.swift */; };
+		D6E2F3A4B5C6D7E8F9A0B1C7 /* AISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E2F3A4B5C6D7E8F9A0B1C6 /* AISettings.swift */; };
+		D8E2F3A4B5C6D7E8F9A0B1C9 /* AIManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E2F3A4B5C6D7E8F9A0B1C8 /* AIManager.swift */; };
+		E3F2A3B4C5D6E7F8A9B0C1D4 /* AIAssistantPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* AIAssistantPanelView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +79,13 @@
 		B5C2D3E4F5A6B7C8D9E0F1A6 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		B7C2D3E4F5A6B7C8D9E0F1A8 /* TerminalPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPanelView.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B6C7D8E9F0A1B2 /* FindInFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindInFilesView.swift; sourceTree = "<group>"; };
+		D1E2F3A4B5C6D7E8F9A0B1C2 /* AIServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIServiceProtocol.swift; sourceTree = "<group>"; };
+		D3E2F3A4B5C6D7E8F9A0B1C4 /* OllamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaService.swift; sourceTree = "<group>"; };
+		S1E2R3V4I5C6E7S8O1P2E3N4 /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
+		S3E2R3V4I5C6E7S8A1N2T3H4 /* AnthropicService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicService.swift; sourceTree = "<group>"; };
+		D5E2F3A4B5C6D7E8F9A0B1C6 /* AISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettings.swift; sourceTree = "<group>"; };
+		D7E2F3A4B5C6D7E8F9A0B1C8 /* AIManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIManager.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D6E7F8A9B0C1D2 /* AIAssistantPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantPanelView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -126,6 +140,8 @@
 		3C742E242DD0118300CFDBBE = {
 			isa = PBXGroup;
 			children = (
+				E1F2A3B4C5D6E7F8A9B0C1D2 /* Protocols */,
+				E3F2A3B4C5D6E7F8A9B0C1D4 /* Services */,
 				3C742E742DD021F700CFDBBE /* Utilities */,
 				3C742E692DD0134D00CFDBBE /* Components */,
 				3C742E682DD0134800CFDBBE /* Managers */,
@@ -161,6 +177,7 @@
 				B5C2D3E4F5A6B7C8D9E0F1A6 /* TerminalView.swift */,
 				B7C2D3E4F5A6B7C8D9E0F1A8 /* TerminalPanelView.swift */,
 				C1D2E3F4A5B6C7D8E9F0A1B2 /* FindInFilesView.swift */,
+				E1F2A3B4C5D6E7F8A9B0C1D2 /* AIAssistantPanelView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -170,6 +187,7 @@
 			children = (
 				3C742E5E2DD0121F00CFDBBE /* Document.swift */,
 				B1C2D3E4F5A6B7C8D9E0F1A2 /* Terminal.swift */,
+				D5E2F3A4B5C6D7E8F9A0B1C6 /* AISettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -181,8 +199,36 @@
 				3C742E702DD01A0100CFDBBE /* FindPanelManager.swift */,
 				3CE811722DD173B000D55103 /* AppDelegate.swift */,
 				B3C2D3E4F5A6B7C8D9E0F1A4 /* TerminalManager.swift */,
+				D7E2F3A4B5C6D7E8F9A0B1C8 /* AIManager.swift */,
 			);
 			path = Managers;
+			sourceTree = "<group>";
+		};
+		3C742E692DD0134D00CFDBBE /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				3C742E602DD0122E00CFDBBE /* CustomTextView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+/* Begin PBXGroup section */
+		E1F2A3B4C5D6E7F8A9B0C1D2 /* Protocols */ = {
+			isa = PBXGroup;
+			children = (
+				D1E2F3A4B5C6D7E8F9A0B1C2 /* AIServiceProtocol.swift */,
+			);
+			path = Protocols;
+			sourceTree = "<group>";
+		};
+		E3F2A3B4C5D6E7F8A9B0C1D4 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				D3E2F3A4B5C6D7E8F9A0B1C4 /* OllamaService.swift */,
+				S1E2R3V4I5C6E7S8O1P2E3N4 /* OpenAIService.swift */,
+				S3E2R3V4I5C6E7S8A1N2T3H4 /* AnthropicService.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		3C742E692DD0134D00CFDBBE /* Components */ = {
@@ -369,6 +415,13 @@
 				B6C2D3E4F5A6B7C8D9E0F1A7 /* TerminalView.swift in Sources */,
 				B8C2D3E4F5A6B7C8D9E0F1A9 /* TerminalPanelView.swift in Sources */,
 				C2D2E3F4A5B6C7D8E9F0A1B3 /* FindInFilesView.swift in Sources */,
+				D2E2F3A4B5C6D7E8F9A0B1C3 /* AIServiceProtocol.swift in Sources */,
+				D4E2F3A4B5C6D7E8F9A0B1C5 /* OllamaService.swift in Sources */,
+				D6E2F3A4B5C6D7E8F9A0B1C7 /* AISettings.swift in Sources */,
+				D8E2F3A4B5C6D7E8F9A0B1C9 /* AIManager.swift in Sources */,
+				E3F2A3B4C5D6E7F8A9B0C1D4 /* AIAssistantPanelView.swift in Sources */,
+				S2E2R3V4I5C6E7S8O1P2E3N5 /* OpenAIService.swift in Sources */,
+				S4E2R3V4I5C6E7S8A1N2T3H5 /* AnthropicService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

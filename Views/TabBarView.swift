@@ -103,6 +103,36 @@ struct TabButton: View {
             // Call directly without dispatch queue wrapping
             appState.selectTab(at: index)
         }
+        .contextMenu {
+            Button("Rename Tab") {
+                showRenameAlert()
+            }
+        }
+    }
+
+    private func showRenameAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Rename Tab"
+        alert.informativeText = "Enter the new name for the tab:"
+        
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+        textField.stringValue = tab.displayName // Pre-fill with current name
+        alert.accessoryView = textField
+        
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        
+        // Ensure alert runs on the main thread if this function could be called from elsewhere
+        // For contextMenu, it's usually fine, but good practice for UI.
+        DispatchQueue.main.async {
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                let newName = textField.stringValue
+                if !newName.isEmpty {
+                    appState.renameTab(at: index, newName: newName)
+                }
+            }
+        }
     }
 }
 

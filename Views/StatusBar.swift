@@ -7,6 +7,7 @@ struct StatusBar: View {
     let columnNumber: Int
     let selectedRange: NSRange?
     let encoding: String.Encoding
+    let currentProvider: AIProviderType // Added new property
     
     // Click action handlers
     var onLineColumnClick: (() -> Void)?
@@ -89,6 +90,14 @@ struct StatusBar: View {
             
             Spacer()
             
+            // AI Status (Static for now)
+            Divider()
+                .frame(height: 12)
+            
+            Text("AI: \(currentProvider.displayName)") // Updated to be dynamic
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
             // Encoding (clickable)
             Button(action: {
                 onEncodingClick?()
@@ -152,7 +161,8 @@ struct StatusBar: View {
             lineNumber: 5,
             columnNumber: 15,
             selectedRange: nil,
-            encoding: .utf8
+            encoding: .utf8,
+            currentProvider: .ollama // Added for preview
         )
         .frame(width: 600)
         
@@ -162,7 +172,8 @@ struct StatusBar: View {
             lineNumber: 142,
             columnNumber: 37,
             selectedRange: NSRange(location: 100, length: 25),
-            encoding: .utf16
+            encoding: .utf16,
+            currentProvider: .openAI // Added for preview
         )
         .frame(width: 600)
     }
