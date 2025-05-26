@@ -30,9 +30,9 @@ A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with
 - ⌨️ **Keyboard Toggle** - Show/hide with ⌘⇧E ✅
 
 ### Advanced Features ✅
-- 📝 **Markdown Preview** - Live preview with synchronized scrolling ✅
+- 📝 **Markdown Preview** - Basic preview of Markdown text (placeholder rendering) with synchronized scrolling. Export to HTML/PDF available. (Full live rendering requires Markdown library integration) 🚧
 - 📤 **Markdown Export** - Export to HTML and PDF formats ✅
-- 💻 **Integrated Terminal** - Built-in terminal with multiple sessions (Ready, not integrated)
+- 💻 **Integrated Terminal** - Built-in terminal with multiple sessions ✅
 
 ### In Development
 - 📍 **Bookmarking** - Mark and navigate important lines
@@ -86,14 +86,17 @@ Unlike ports or Wine-based solutions, NotepadClone2 is:
 ![Theme Options](screenshots/themes.png)
 *Multiple built-in themes including Notepad++ classic*
 
-## Latest Updates (v3.1.0 - Markdown Preview & Terminal)
+## Latest Updates (v3.1.1 - Stability and Bugfix Update)
 
-### What's New (May 24, 2025)
-- 📝 **Markdown Preview** - Live preview with split view and synchronized scrolling
-- 📤 **Export Options** - Export markdown to HTML and PDF formats
-- 💻 **Terminal Implementation** - Integrated terminal with process management (files ready)
-- 🔗 **Synchronized Scrolling** - Keep editor and preview in sync
-- 🎨 **Theme-Aware Preview** - Markdown preview adapts to current theme
+### What's New (YYYY-MM-DD)
+- 💻 **Terminal Integration** - Terminal components are now integrated into the application. ✅
+- 📝 **Markdown Preview** - Basic placeholder preview integrated; full rendering awaiting Markdown library integration. 🚧
+- ✨ **New Themes Added** - "Aqua," "Turbo Pascal," and "Mac OS 8" (placeholders for Turbo Pascal & Mac OS 8).
+- 🐛 **Bug Fixes** - Addressed issues with typing, UI visibility, window restoration, line numbers, tab selection, and "Jump to Line".
+- 🛠️ **Build Fixes** - Resolved compilation errors in `MarkdownSplitView.swift` and `FindInFilesManager.swift`.
+- 💅 **Markdown Export Styling** - Placeholder HTML export is now dark-mode aware.
+- 💾 **Session State Enhanced** - Split view settings are now saved and restored; improved error handling for document session data.
+- 🪵 **Debug Logging** - Added extensive "TYPING_DEBUG:" logs to `CustomTextView`.
 
 ### Recent Features (v3.0.0)
 - 📁 **File Explorer Sidebar** - Complete file management with tree view
@@ -465,11 +468,11 @@ NOTEPAD_DEBUG=1 open NotepadClone2.app
 
 ## Known Issues
 
-- [ ] Terminal files need to be added to Xcode project
-- [ ] Markdown preview files need to be added to Xcode project
-- [ ] Find in Files UI requires manual addition to Xcode project
-- [ ] Auto-completion system planned for next release
-- [ ] Some code folding UI files need Xcode integration
+- [🚧] Markdown preview uses placeholder rendering; requires Markdown library integration for full functionality.
+- [ ] Find in Files UI requires manual addition to Xcode project (though backend logic is present).
+- [ ] Auto-completion system planned for next release.
+- [🚧] Styling for "Turbo Pascal" and "Mac OS 8" themes are placeholders and need refinement.
+- [ ] Full Markdown parsing and rendering (beyond current placeholder) for exported HTML.
 
 ## Roadmap
 

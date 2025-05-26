@@ -38,6 +38,7 @@ struct ContentView: View {
                     FileExplorerView()
                         .environmentObject(appState)
                         .frame(width: 250)
+                        .layoutPriority(1) // Ensure FileExplorerView is not crushed
                         .transition(.move(edge: .leading).combined(with: .opacity))
                     
                     Divider()
@@ -48,7 +49,6 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Terminal Panel
-                // TODO: Uncomment when Terminal files are added to Xcode project
                 if appState.terminalManager.showTerminal {
                     if appState.terminalManager.terminalPosition == .bottom {
                         Divider()
@@ -61,7 +61,6 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Terminal Panel (Right position)
-            // TODO: Uncomment when Terminal files are added to Xcode project
             if appState.terminalManager.showTerminal && appState.terminalManager.terminalPosition == .right {
                 Divider()
                 TerminalPanelView(terminalManager: appState.terminalManager)
@@ -93,8 +92,7 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showFindPanel)
         .animation(.easeInOut(duration: 0.2), value: appState.findManager.showReplacePanel)
         .animation(.easeInOut(duration: 0.2), value: appState.splitViewEnabled)
-        // TODO: Uncomment when Terminal files are added to Xcode project
-        .animation(.easeInOut(duration: 0.2), value: appState.terminalManager.showTerminal)
+        .animation(.easeInOut(duration: 0.2), value: appState.terminalManager.showTerminal) 
         // Drag and drop support
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers: providers)
@@ -137,7 +135,7 @@ struct ContentView: View {
             }
         }
         // Make view dependent on refresh trigger and relevant state changes
-        .id("contentView_\(refreshTrigger.id)_\(appState.appTheme.rawValue)_\(appState.showFileExplorer)_\(appState.splitViewEnabled)_\(hasAppeared)")
+        .id("contentView_\(refreshTrigger.id)_\(appState.appTheme.rawValue)_\(appState.showFileExplorer)_\(hasAppeared)") // Temporarily removed _\(appState.splitViewEnabled) for diagnostics
         // Cleanup on disappear
         .onDisappear {
             NotificationCenter.default.removeObserver(self)
@@ -153,6 +151,8 @@ struct ContentView: View {
             if !appState.tabs.isEmpty {
                 TabBarView()
                     .environmentObject(appState)
+                    .frame(minHeight: 35) // Ensure TabBarView has a minimum height
+                    .layoutPriority(1)   // Give TabBarView higher layout priority
             }
 
             // Editor Area

@@ -420,18 +420,25 @@ extension Document {
     // Save all document states to UserDefaults
     static func saveSessionState(documents: [Document]) {
         let states = documents.map { $0.saveState() }
-        if let encoded = try? JSONEncoder().encode(states) {
+        do {
+            let encoded = try JSONEncoder().encode(states)
             UserDefaults.standard.set(encoded, forKey: "DocumentSessionState")
+        } catch {
+            print("Error encoding document session states: \(error)")
         }
     }
     
     // Restore documents from UserDefaults
     static func restoreSessionState() -> [Document] {
-        guard let data = UserDefaults.standard.data(forKey: "DocumentSessionState"),
-              let states = try? JSONDecoder().decode([DocumentState].self, from: data) else {
+        guard let data = UserDefaults.standard.data(forKey: "DocumentSessionState") else {
             return []
         }
-        
-        return states.map { Document.fromState($0) }
+        do {
+            let states = try JSONDecoder().decode([DocumentState].self, from: data)
+            return states.map { Document.fromState($0) }
+        } catch {
+            print("Error decoding document session states: \(error)")
+            return []
+        }
     }
 }

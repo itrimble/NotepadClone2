@@ -8,6 +8,7 @@ class TerminalManager: ObservableObject {
     @Published var showTerminal: Bool = false
     @Published var terminalPosition: TerminalPosition = .bottom
     @Published var terminalHeight: CGFloat = 200
+    @Published var terminalWidth: CGFloat = 300 // Added for right-positioned terminal
     
     private var cancellables = Set<AnyCancellable>()
     
