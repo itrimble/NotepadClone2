@@ -1,4 +1,4 @@
-# Project Context for Claude (v2025-05-24)
+# Project Context for Claude (vYYYY-MM-DD)
 
 ## Project Overview
 
@@ -23,49 +23,65 @@
   * Use camelCase for variables and functions
   * Use PascalCase for types, classes, and protocols
   * Use descriptive variable names that clearly indicate purpose
-* **Preferred Libraries/Frameworks:** SwiftUI, AppKit, Foundation, UniformTypeIdentifiers
-* **Dependency Manager:** None (uses built-in frameworks only)
+* **Preferred Libraries/Frameworks:** SwiftUI, AppKit, Foundation, UniformTypeIdentifiers, Markdown
+* **Dependency Manager:** None (uses built-in frameworks and Apple's `Markdown` package)
 * **Testing Framework:** XCTest
 * **Architecture Pattern:** MVVM with SwiftUI/AppKit bridging
 
 ## Conversation History Summary
 
-* **Last conversation summary:** Session 3 (2025-05-24) - Implemented comprehensive file explorer with file operations (create, rename, delete). Fixed duplicate View menu issue by reorganizing menus and adding Preferences to app menu. Resolved app initialization issue where no tabs were created on startup. The file explorer now supports full file management capabilities with context menus.
+* **Last conversation summary:** Session 4 (2025-05-24) - Implemented Markdown preview with split view and export options. Readied Terminal components for integration.
 
 ## File Descriptions
 
 ### Managers
 * `AppDelegate.swift`: Application lifecycle management, appearance settings, and window restoration handling.
-* `AppState.swift`: Central state management for the application, handling tabs, documents, and user interactions. Now includes code folding notification handling and auto-indent functionality.
+* `AppState.swift`: Central state management for the application, handling tabs, documents, and user interactions. Now includes code folding notification handling, auto-indent functionality, terminal management, and split view state.
 * `FindPanelManager.swift`: Handles search and replace functionality for text documents.
+* `FindInFilesManager.swift`: Manages asynchronous multi-file search operations.
+* `TerminalManager.swift`: Manages terminal sessions, including creation, closure, and state.
 
 ### Models
 * `Document.swift`: Data model for text documents, including text content, file URL, syntax highlighting settings, and code folding state persistence.
+* `Terminal.swift`: Model for individual terminal sessions, managing state and process interaction.
 
 ### Components
 * `CustomTextView.swift`: SwiftUI wrapper for NSTextView with enhanced features including line numbers, code folding controls (CodeFoldingRulerView), bracket matching, and smart indentation support.
 
 ### Views
-* `ContentView.swift`: Main view of the application combining tab bar, text editor, and status bar. Supports split pane editing and drag & drop file opening.
+* `ContentView.swift`: Main interface of the application combining tab bar, text editor, status bar, file explorer, and terminal panel. Supports split pane editing and drag & drop file opening.
 * `TabBarView.swift`: Custom tab implementation for document switching with theme-aware styling.
 * `StatusBar.swift`: Enhanced status bar showing word count, character count, line:column position, selection info, and file encoding.
 * `PreferencesWindow.swift`: Settings interface for the application.
 * `SplitEditorView.swift`: Split pane editor view for side-by-side document editing.
-* `FileExplorerView.swift`: ✨ NEW - File explorer sidebar with tree view, file operations (create, rename, delete), and context menus.
-* `MarkdownPreviewView.swift`: ✨ NEW - WebKit-based markdown preview with theme-aware styling and HTML rendering.
-* `MarkdownSplitView.swift`: ✨ NEW - Split view combining editor and preview with synchronized scrolling and export options.
+* `FileExplorerView.swift`: File explorer sidebar with tree view, file operations (create, rename, delete), and context menus.
+* `MarkdownPreviewView.swift`: WebKit-based markdown preview using the `Markdown` package for rendering, with theme-aware styling.
+* `MarkdownSplitView.swift`: Split view combining editor and preview with synchronized scrolling and export options, using the `Markdown` package for HTML generation.
+* `TerminalView.swift`: View for terminal emulation, handling input/output to the shell process.
+* `TerminalPanelView.swift`: UI for managing multiple terminal tabs and displaying the active terminal.
+* `FindInFilesView.swift`: UI for displaying and interacting with "Find in Files" results.
 
 ### Utilities
 * `SyntaxHighlighter.swift`: Provides syntax highlighting for various programming languages.
-* `ThemeConstants.swift`: Defines the available themes and their visual properties.
-* `Notifications.swift`: Central place for all notification name declarations, including new code folding notifications.
-* `CodeFolder.swift`: ✨ NEW - Detects foldable code regions (functions, classes, blocks) for multiple programming languages.
-* `BracketMatcher.swift`: ✨ NEW - Provides intelligent bracket matching and highlighting functionality.
-* `SmartIndenter.swift`: ✨ NEW - Implements language-aware automatic indentation with configurable rules.
+* `ThemeConstants.swift`: Defines the available themes (including new "Aqua", "Turbo Pascal", "Mac OS 8") and their visual properties.
+* `Notifications.swift`: Central place for all notification name declarations, including new code folding notifications and jump to line.
+* `CodeFolder.swift`: Detects foldable code regions (functions, classes, blocks) for multiple programming languages.
+* `BracketMatcher.swift`: Provides intelligent bracket matching and highlighting functionality.
+* `SmartIndenter.swift`: Implements language-aware automatic indentation with configurable rules.
 
 ### Project Files
-* `NotepadCloneApp.swift`: Main app entry point and menu configuration. Now includes Auto Indent menu item.
+* `NotepadCloneApp.swift`: Main app entry point and menu configuration. Now includes Auto Indent menu item and Terminal toggle.
 * `NotepadClone2.xcodeproj`: Xcode project file.
+
+## Recent Updates (YYYY-MM-DD - Bugfixes, Integrations, Build Errors Resolved)
+
+### Key Fixes & Integrations:
+*   **Markdown Rendering:** Confirmed and integrated usage of the existing `Markdown` package in `MarkdownSplitView.swift` for proper HTML exports, replacing a temporary placeholder.
+*   **Terminal Integration:** Successfully integrated Terminal components (`TerminalManager`, `TerminalView`, `TerminalPanelView`) into the main application flow; UI is now active.
+*   **Core Functionality:** Resolved critical bugs related to typing (first responder, state flags), UI element visibility (tabs, file explorer), dual window opening, line number display, tab selection when opening files, and "Jump to Line" functionality.
+*   **Theme System:** Added missing themes ("Aqua", "Turbo Pascal", "Mac OS 8") with placeholder styling for the latter two.
+*   **Build Errors:** Fixed compilation errors in `FindInFilesManager.swift` (async iterator, unused variable) and initial errors in `MarkdownSplitView.swift` (theme property access, WebKit import).
+*   **State Management:** Enhanced session state to include split view settings; added error logging for document state saving/loading.
 
 ## Recent Updates (2025-05-24 Session 4)
 
@@ -191,13 +207,6 @@ Added comprehensive debug logging to diagnose text input issues:
 ## Future Enhancements
 
 Based on Notepad++ design analysis and current progress, remaining features include:
-* ~~Find in Files functionality~~ ✅ Completed (UI integration needed)
-* ~~Enhanced status bar~~ ✅ Completed
-* ~~Drag and drop file opening~~ ✅ Completed
-* ~~Code folding/unfolding~~ ✅ Completed
-* ~~Bracket matching~~ ✅ Completed
-* ~~Smart indentation~~ ✅ Completed
-* ~~File explorer/project sidebar~~ ✅ Completed (Phase 3)
 * Document map/minimap for quick navigation
 * Column mode and multi-cursor editing
 * Macro recording and playback system
@@ -209,13 +218,14 @@ Based on Notepad++ design analysis and current progress, remaining features incl
 
 * The application uses a mix of SwiftUI and AppKit components to provide advanced text editing capabilities.
 * Window state restoration is important for preserving user sessions.
-* Theme management supports System, Light, Dark, Notepad++, Material Dark, and Nord themes.
+* Theme management supports System, Light, Dark, Notepad++, Material Dark, Nord, Aqua, Turbo Pascal, and Mac OS 8 themes.
 * Uses the NSWindowRestoration protocol for window state persistence.
 * Built using Xcode version 16.3 (16E140).
 * Line numbers are implemented using NSRulerView for native macOS integration.
 * Split view uses HSplitView/VSplitView for proper macOS split pane behavior.
 * Code folding uses enhanced NSRulerView (CodeFoldingRulerView) with interactive controls.
 * Bracket matching uses NSLayoutManager temporary attributes for non-destructive highlighting.
+* Markdown rendering uses Apple's `swift-markdown` package.
 
 ## Conversation History / TODO
 
