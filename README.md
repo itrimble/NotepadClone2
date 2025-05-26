@@ -30,7 +30,7 @@ A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with
 - ⌨️ **Keyboard Toggle** - Show/hide with ⌘⇧E ✅
 
 ### Advanced Features ✅
-- 📝 **Markdown Preview** - Basic preview of Markdown text (placeholder rendering) with synchronized scrolling. Export to HTML/PDF available. (Full live rendering requires Markdown library integration) 🚧
+- 📝 **Markdown Preview** - Live preview of Markdown text using the integrated Markdown package, with synchronized scrolling. Export to HTML/PDF available. ✅
 - 📤 **Markdown Export** - Export to HTML and PDF formats ✅
 - 💻 **Integrated Terminal** - Built-in terminal with multiple sessions ✅
 
@@ -90,7 +90,7 @@ Unlike ports or Wine-based solutions, NotepadClone2 is:
 
 ### What's New (YYYY-MM-DD)
 - 💻 **Terminal Integration** - Terminal components are now integrated into the application. ✅
-- 📝 **Markdown Preview** - Basic placeholder preview integrated; full rendering awaiting Markdown library integration. 🚧
+- 📝 **Markdown Rendering** - Correctly integrated the existing Markdown package for rendering in exports and preview.
 - ✨ **New Themes Added** - "Aqua," "Turbo Pascal," and "Mac OS 8" (placeholders for Turbo Pascal & Mac OS 8).
 - 🐛 **Bug Fixes** - Addressed issues with typing, UI visibility, window restoration, line numbers, tab selection, and "Jump to Line".
 - 🛠️ **Build Fixes** - Resolved compilation errors in `MarkdownSplitView.swift` and `FindInFilesManager.swift`.
@@ -468,7 +468,6 @@ NOTEPAD_DEBUG=1 open NotepadClone2.app
 
 ## Known Issues
 
-- [🚧] Markdown preview uses placeholder rendering; requires Markdown library integration for full functionality.
 - [ ] Find in Files UI requires manual addition to Xcode project (though backend logic is present).
 - [ ] Auto-completion system planned for next release.
 - [🚧] Styling for "Turbo Pascal" and "Mac OS 8" themes are placeholders and need refinement.

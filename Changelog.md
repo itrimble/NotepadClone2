@@ -7,10 +7,10 @@
 - **Line Number Visibility:** Added theme color clash detection for the `CodeFoldingRulerView` in `CustomTextView` to ensure line numbers are visible.
 - **Tab Selection Logic:** Corrected tab selection logic in `AppState.newDocument()` by removing debug code that forced selection to the newest tab, fixing issues with opening files from the file explorer.
 - **"Jump to Line" Functionality:** Refactored "Jump to Line" to correctly scroll to the target line and set the cursor position by using `NotificationCenter` to communicate between `AppState` and `CustomTextView.Coordinator`.
-- **`MarkdownSplitView.swift` Build Errors:**
+- **`MarkdownSplitView.swift` Build Errors & Markdown Integration:**
     - Changed `appState.appTheme.name` to `appState.appTheme.rawValue`.
     - Added `import WebKit`.
-    - Implemented a placeholder fix for Markdown parsing by using HTML-escaped plain text in `<pre>` tags for export.
+    - Correctly integrated the existing `Markdown` package for proper HTML export rendering (replacing a temporary placeholder).
 - **`FindInFilesManager.swift` Build Errors & Warnings:**
     - Removed unused local `results` variable in `performSearch()`.
     - Corrected max results check to use `self.searchResults.count`.
