@@ -100,7 +100,7 @@ class FindInFilesManager: ObservableObject {
         guard !searchTerm.isEmpty else { return }
         
         let searchPattern = prepareSearchPattern(searchTerm, options: options)
-        var results: [SearchResult] = []
+        // Removed: var results: [SearchResult] = [] - Results are now directly appended to self.searchResults
         
         // Count total files for progress
         let totalFiles = countFiles(in: directory, options: options)
@@ -112,7 +112,9 @@ class FindInFilesManager: ObservableObject {
             return
         }
         
-        for case let fileURL as URL in enumerator {
+        let allFileURLs = enumerator.allObjects.compactMap { $0 as? URL }
+        
+        for fileURL in allFileURLs {
             // Check cancellation
             if Task.isCancelled { break }
             
@@ -139,7 +141,7 @@ class FindInFilesManager: ObservableObject {
             }
             
             // Check max results
-            if let maxResults = options.maxResults, results.count >= maxResults {
+            if let maxResults = options.maxResults, self.searchResults.count >= maxResults { // Check against self.searchResults
                 break
             }
         }

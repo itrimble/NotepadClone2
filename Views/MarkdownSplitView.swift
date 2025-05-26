@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit // Added import for WKWebView
 
 struct MarkdownSplitView: View {
     @ObservedObject var appState: AppState
@@ -95,7 +96,7 @@ struct MarkdownSplitView: View {
                     MarkdownPreviewView(
                         markdownText: document.text,
                         scrollPosition: $previewScrollPosition,
-                        theme: appState.appTheme.name
+                        theme: appState.appTheme.rawValue // Changed .name to .rawValue
                     )
                 }
                 .frame(width: geometry.size.width * (1 - splitRatio))
@@ -162,10 +163,15 @@ struct MarkdownSplitView: View {
     }
     
     private func generateHTMLExport() -> String {
-        let markdownDocument = Markdown.Document(parsing: document.text)
-        let isDark = appState.appTheme.name == "Dark" || 
-                    appState.appTheme.name == "Material Dark" || 
-                    appState.appTheme.name == "Nord"
+        // TODO: Integrate a proper Markdown parsing library here. Using plain text in <pre> as a placeholder.
+        let escapedMarkdown = document.text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+        
+        let isDark = appState.appTheme.rawValue == "Dark" || // Changed .name to .rawValue
+                    appState.appTheme.rawValue == "Notepad++ Material Dark" || // Changed .name to .rawValue and updated string
+                    appState.appTheme.rawValue == "Notepad++ Nord" // Changed .name to .rawValue and updated string
         
         return """
         <!DOCTYPE html>
@@ -180,7 +186,7 @@ struct MarkdownSplitView: View {
         </head>
         <body>
             <div class="markdown-body">
-                \(markdownDocument.renderHTML())
+                <pre>\(escapedMarkdown)</pre>
             </div>
         </body>
         </html>

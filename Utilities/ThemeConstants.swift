@@ -23,13 +23,16 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case notepadPlusPlus = "Notepad++"
     case materialDark = "Notepad++ Material Dark"
     case nord = "Notepad++ Nord"
+    case aqua = "Aqua"
+    case turboPascal = "Turbo Pascal"
+    case macOS8 = "Mac OS 8"
     
     var id: String { self.rawValue }
     
     // Get the color scheme for SwiftUI
     var colorScheme: ColorScheme? {
         switch self {
-        case .light, .notepadPlusPlus:
+        case .light, .notepadPlusPlus, .aqua, .turboPascal, .macOS8: // turboPascal and macOS8 are placeholders
             return .light
         case .dark, .materialDark, .nord:
             return .dark
@@ -53,6 +56,12 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return "text.badge.checkmark"
         case .nord:
             return "snow"
+        case .aqua:
+            return "drop.fill" // Placeholder
+        case .turboPascal:
+            return "pc" // Placeholder
+        case .macOS8:
+            return "desktopcomputer" // Placeholder
         }
     }
     
@@ -63,7 +72,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
             switch self {
             case .system:
                 NSApp.appearance = nil // Use system setting
-            case .light:
+            case .light, .aqua:
                 NSApp.appearance = NSAppearance(named: .aqua)
             case .dark:
                 NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -73,6 +82,10 @@ enum AppTheme: String, CaseIterable, Identifiable {
             case .materialDark, .nord:
                 // Force dark mode for these themes
                 NSApp.appearance = NSAppearance(named: .darkAqua)
+            case .turboPascal, .macOS8:
+                // TODO: turboPascal - Placeholder styling, requires accurate color definitions.
+                // TODO: macOS8 - Placeholder styling, requires accurate color definitions.
+                NSApp.appearance = NSAppearance(named: .aqua) // Placeholder
             }
             
             // Notify all views that the theme has changed
@@ -100,6 +113,14 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return NSColor(hex: "#263238")
         case .nord:
             return NSColor(hex: "#2E3440")
+        case .aqua:
+            return NSColor.windowBackgroundColor // System's Aqua background
+        case .turboPascal:
+            // TODO: turboPascal - Placeholder styling, requires accurate color definitions.
+            return NSColor(hex: "#0000A0") // Classic Turbo Pascal blue
+        case .macOS8:
+            // TODO: macOS8 - Placeholder styling, requires accurate color definitions.
+            return NSColor(hex: "#CCCCCC") // Classic Mac OS gray
         }
     }
     
@@ -117,6 +138,14 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return NSColor(hex: "#ECEFF1")
         case .nord:
             return NSColor(hex: "#D8DEE9")
+        case .aqua:
+            return NSColor.textColor // System's Aqua text color
+        case .turboPascal:
+            // TODO: turboPascal - Placeholder styling, requires accurate color definitions.
+            return NSColor(hex: "#FFFF00") // Yellow text
+        case .macOS8:
+            // TODO: macOS8 - Placeholder styling, requires accurate color definitions.
+            return NSColor.black // Black text
         }
     }
     
@@ -217,6 +246,56 @@ enum AppTheme: String, CaseIterable, Identifiable {
                 annotationColor: NSColor(hex: "#5E81AC"),
                 regexColor: NSColor(hex: "#EBCB8B")
             )
+        // TODO: Define proper syntax highlighting for Aqua
+        case .aqua:
+            let baseTheme = SyntaxTheme.default // Or system-derived
+            return SyntaxTheme(
+                textColor: editorTextColor, // Use self.editorTextColor()
+                keywordColor: baseTheme.keywordColor,
+                stringColor: baseTheme.stringColor,
+                commentColor: baseTheme.commentColor,
+                numberColor: baseTheme.numberColor,
+                variableColor: baseTheme.variableColor,
+                pathColor: baseTheme.pathColor,
+                functionColor: baseTheme.functionColor,
+                typeColor: baseTheme.typeColor,
+                annotationColor: baseTheme.annotationColor,
+                regexColor: baseTheme.regexColor
+            )
+        // TODO: Define proper syntax highlighting for Turbo Pascal
+        case .turboPascal:
+            // TODO: turboPascal - Placeholder styling, requires accurate color definitions.
+            let baseTheme = SyntaxTheme.default 
+            return SyntaxTheme(
+                textColor: editorTextColor, // Use self.editorTextColor()
+                keywordColor: NSColor(hex: "#FFFFFF"), // White keywords on blue
+                stringColor: NSColor(hex: "#00FFFF"), // Cyan strings
+                commentColor: NSColor(hex: "#808080"), // Gray comments
+                numberColor: NSColor(hex: "#00FF00"), // Green numbers
+                variableColor: NSColor(hex: "#FFFF00"), // Yellow variables (same as text)
+                pathColor: NSColor(hex: "#00FFFF"),
+                functionColor: NSColor(hex: "#FFFFFF"),
+                typeColor: NSColor(hex: "#FFFFFF"),
+                annotationColor: NSColor(hex: "#808080"),
+                regexColor: NSColor(hex: "#00FFFF")
+            )
+        // TODO: Define proper syntax highlighting for Mac OS 8
+        case .macOS8:
+            // TODO: macOS8 - Placeholder styling, requires accurate color definitions.
+            let baseTheme = SyntaxTheme.default
+            return SyntaxTheme(
+                textColor: editorTextColor, // Use self.editorTextColor()
+                keywordColor: baseTheme.keywordColor,
+                stringColor: baseTheme.stringColor,
+                commentColor: baseTheme.commentColor,
+                numberColor: baseTheme.numberColor,
+                variableColor: baseTheme.variableColor,
+                pathColor: baseTheme.pathColor,
+                functionColor: baseTheme.functionColor,
+                typeColor: baseTheme.typeColor,
+                annotationColor: baseTheme.annotationColor,
+                regexColor: baseTheme.regexColor
+            )
         }
     }
     
@@ -236,6 +315,14 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return Color(NSColor(hex: "#1E272C"))
         case .nord:
             return Color(NSColor(hex: "#252A33"))
+        case .aqua:
+            return Color(NSColor.controlBackgroundColor)
+        case .turboPascal:
+            // TODO: turboPascal - Placeholder styling, requires accurate color definitions.
+            return Color(hex: "#000080") // Darker blue
+        case .macOS8:
+            // TODO: macOS8 - Placeholder styling, requires accurate color definitions.
+            return Color(hex: "#BDBDBD") // Slightly darker gray
         }
     }
     
@@ -254,6 +341,14 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return Color(NSColor(hex: "#314549"))
         case .nord:
             return Color(NSColor(hex: "#3B4252"))
+        case .aqua:
+            return Color.accentColor.opacity(0.2)
+        case .turboPascal:
+            // TODO: turboPascal - Placeholder styling, requires accurate color definitions.
+            return Color(hex: "#00FFFF").opacity(0.3) // Cyanish
+        case .macOS8:
+            // TODO: macOS8 - Placeholder styling, requires accurate color definitions.
+            return Color.black.opacity(0.1) // Darker selection
         }
     }
     

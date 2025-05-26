@@ -165,7 +165,6 @@ class AppState: ObservableObject {
     var findManager: FindPanelManager!
     
     // Terminal Manager
-    // TODO: Uncomment when Terminal files are added to Xcode project
     @Published var terminalManager = TerminalManager()
     
     // Markdown Preview
@@ -401,6 +400,9 @@ class AppState: ObservableObject {
     private func saveWindowState() {
         // Save additional window-specific state
         UserDefaults.standard.set(showStatusBar, forKey: "ShowStatusBar")
+        UserDefaults.standard.set(splitViewEnabled, forKey: "SplitViewEnabled")
+        UserDefaults.standard.set(splitViewOrientation.rawValue, forKey: "SplitViewOrientation")
+        UserDefaults.standard.set(splitViewTabIndex, forKey: "SplitViewTabIndex")
         
         // Save theme and color scheme
         appTheme.save()
@@ -423,6 +425,14 @@ class AppState: ObservableObject {
     private func restoreWindowState() {
         // Restore window state
         showStatusBar = UserDefaults.standard.bool(forKey: "ShowStatusBar")
+        splitViewEnabled = UserDefaults.standard.bool(forKey: "SplitViewEnabled")
+        if let orientationRawValue = UserDefaults.standard.string(forKey: "SplitViewOrientation"),
+           let orientation = SplitOrientation(rawValue: orientationRawValue) {
+            splitViewOrientation = orientation
+        } else {
+            splitViewOrientation = .horizontal // Default
+        }
+        splitViewTabIndex = UserDefaults.standard.object(forKey: "SplitViewTabIndex") as? Int
         
         // Load theme (already done in init, but we'll make sure it's applied)
         appTheme = AppTheme.loadSavedTheme()
@@ -621,10 +631,11 @@ class AppState: ObservableObject {
                     self.currentTab = 0
                 }
                 
-                // DEBUG: Force tab selection to newest tab for debugging
-                // TODO: Remove this once tab selection is working properly
-                print("FORCE SELECTING newest tab: \(self.tabs.count - 1)")
-                self.currentTab = self.tabs.count - 1
+                // The following debug lines were removed as per task:
+                // // DEBUG: Force tab selection to newest tab for debugging
+                // // TODO: Remove this once tab selection is working properly
+                // print("FORCE SELECTING newest tab: \(self.tabs.count - 1)")
+                // self.currentTab = self.tabs.count - 1
             }
             
             // Force UI update
@@ -1129,10 +1140,8 @@ class AppState: ObservableObject {
                 charPosition += lines[i].count + 1 // +1 for newline
             }
             
-            // Send the command to jump to that position
-            NSApp.sendAction(#selector(NSTextView.scrollRangeToVisible(_:)),
-                           to: nil,
-                           from: NSRange(location: charPosition, length: 0))
+            // Post a notification for CustomTextView to handle the jump
+            NotificationCenter.default.post(name: .jumpToLine, object: nil, userInfo: ["lineNumber": lineNumber, "charPosition": charPosition])
         }
     }
     
