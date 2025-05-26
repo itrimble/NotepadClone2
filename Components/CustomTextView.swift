@@ -11,10 +11,10 @@ struct CustomTextView: NSViewRepresentable {
     let document: Document  // Pass the document directly
     
     func makeNSView(context: Context) -> NSScrollView {
-        print("🔧 CustomTextView.makeNSView - Creating text view")
+        print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Creating text view")
         let scrollView = NSTextView.scrollableTextView()
         let textView = scrollView.documentView as! NSTextView
-        print("🔧 CustomTextView.makeNSView - ScrollView: \(scrollView), TextView: \(textView)")
+        print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - ScrollView: \(scrollView), TextView: \(textView)")
         
         // Configure scroll view
         scrollView.hasVerticalScroller = true
@@ -25,9 +25,10 @@ struct CustomTextView: NSViewRepresentable {
         // Configure text view for proper text handling
         textView.isRichText = true
         textView.usesFontPanel = false  // Disable font panel to prevent color picker
+        print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Initial configuration: usesFontPanel = \(textView.usesFontPanel)")
         textView.allowsUndo = true
         textView.delegate = context.coordinator  // Set delegate after other properties
-        print("🔧 CustomTextView.makeNSView - Delegate set: \(textView.delegate != nil)")
+        print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Delegate set: \(textView.delegate != nil)")
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.textContainerInset = NSSize(width: 10, height: 10)
@@ -35,8 +36,9 @@ struct CustomTextView: NSViewRepresentable {
         // CRITICAL: Make text view editable and visible
         textView.isEditable = true
         textView.isSelectable = true
-        print("🔧 CustomTextView.makeNSView - isEditable: \(textView.isEditable), isSelectable: \(textView.isSelectable)")
+        print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Initial configuration: isEditable = \(textView.isEditable), isSelectable = \(textView.isSelectable)")
         textView.importsGraphics = false
+        print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Initial configuration: importsGraphics = \(textView.importsGraphics)")
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
@@ -64,6 +66,11 @@ struct CustomTextView: NSViewRepresentable {
             lineNumberView.language = language
             lineNumberView.coordinator = context.coordinator
             scrollView.verticalRulerView = lineNumberView
+
+            // Add color clash logging for line number ruler
+            if lineNumberView.textColor.isApproximatelyEqual(to: lineNumberView.backgroundColor) {
+                print("TYPING_DEBUG: WARNING LineNumberView.makeNSView - Line number text color and background color are very similar. Line numbers may be invisible. Text Color: \(lineNumberView.textColor), Background Color: \(lineNumberView.backgroundColor)")
+            }
         } else {
             scrollView.hasVerticalRuler = false
             scrollView.rulersVisible = false
@@ -90,24 +97,29 @@ struct CustomTextView: NSViewRepresentable {
         
         // Set typing attributes for new text
         textView.typingAttributes = defaultAttributes
+        print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Default typing attributes: \(defaultAttributes)") // Corrected typo makeNSVew -> makeNSView
         
-        // Make text view the first responder when window is ready
+        // Make text view the first responder when window is ready.
+        // This is deferred to ensure the window and view hierarchy are fully set up.
         DispatchQueue.main.async {
             if let window = textView.window {
+                print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Attempting to make first responder. Window: \(window), isKey: \(window.isKeyWindow), isVisible: \(window.isVisible)")
+                print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Current first responder before attempt: \(String(describing: window.firstResponder))")
                 let success = window.makeFirstResponder(textView)
-                print("🔧 CustomTextView.makeNSView - First responder attempt: \(success), window: \(window), current first responder: \(window.firstResponder)")
+                print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - First responder attempt outcome: \(success ? "SUCCESS" : "FAILURE")")
+                print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Current first responder after attempt: \(String(describing: window.firstResponder))")
             } else {
-                print("❌ CustomTextView.makeNSView - No window available for first responder")
+                print("TYPING_DEBUG: ❌ CustomTextView.makeNSView - No window available for first responder")
             }
         }
         
-        print("✅ CustomTextView.makeNSView - Complete, returning scrollView")
+        print("TYPING_DEBUG: ✅ CustomTextView.makeNSView - Complete, returning scrollView")
         return scrollView
     }
     
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         let textView = nsView.documentView as! NSTextView
-        print("🔄 CustomTextView.updateNSView - Called, textView: \(textView)")
+        print("TYPING_DEBUG: 🔄 CustomTextView.updateNSView - Called, textView: \(textView)")
         
         // Always update theme when view updates
         context.coordinator.updateTheme(textView)
@@ -119,8 +131,14 @@ struct CustomTextView: NSViewRepresentable {
             if let codeRulerView = nsView.verticalRulerView as? CodeFoldingRulerView {
                 codeRulerView.backgroundColor = NSColor(appTheme.tabBarBackgroundColor())
                 codeRulerView.textColor = appTheme.editorTextColor() // Make base color more solid
-                codeRulerView.language = language
-                codeRulerView.needsDisplay = true
+                
+                // Add color clash logging for line number ruler
+                if codeRulerView.textColor.isApproximatelyEqual(to: codeRulerView.backgroundColor) {
+                    print("TYPING_DEBUG: WARNING LineNumberView.updateNSView - Line number text color and background color are very similar. Line numbers may be invisible. Text Color: \(codeRulerView.textColor), Background Color: \(codeRulerView.backgroundColor)")
+                }
+
+                codeRulerView.language = language // This was already here
+                codeRulerView.needsDisplay = true    // This was already here
             }
         } else {
             nsView.hasVerticalRuler = false
@@ -134,6 +152,7 @@ struct CustomTextView: NSViewRepresentable {
             
             // Check if we need to update
             if currentText != newText || textStorage.length != attributedText.length {
+                print("TYPING_DEBUG: 🔄 CustomTextView.updateNSView - Text content is being updated. currentText.count: \(currentText.count), newText.count: \(newText.count), textStorage.length: \(textStorage.length), attributedText.length: \(attributedText.length)")
                 // Store the current selection
                 let selectedRange = textView.selectedRange()
                 
@@ -169,26 +188,14 @@ struct CustomTextView: NSViewRepresentable {
         // Update cursor color for visibility
         textView.insertionPointColor = appTheme.editorTextColor()
         
-        // CRITICAL FIX: Safe responder management
-        if let window = textView.window,
-           window.isVisible,
-           window.isKeyWindow,
-           !context.coordinator.isBeingRemoved {
-            
-            // Only make first responder after a delay to avoid conflicts
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                if let stillValidWindow = textView.window,
-                   stillValidWindow.isVisible && stillValidWindow.isKeyWindow,
-                   stillValidWindow.firstResponder != textView {
-                    stillValidWindow.makeFirstResponder(textView)
-                    // Force cursor to blink
-                    textView.updateInsertionPointStateAndRestartTimer(true)
-                }
-            }
-        }
+        // CRITICAL FIX: Safe responder management - Removed redundant makeFirstResponder call from updateNSView.
+        // The initial makeFirstResponder in makeNSView (async) should be the primary mechanism.
+        // If focus is lost later, it's often due to other UI interactions or window lifecycle events
+        // that should ideally be handled by the system or specific event handlers, not generically in updateNSView.
     }
     
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        print("TYPING_DEBUG: 🗑️ CustomTextView.dismantleNSView - Called")
         // CRITICAL FIX: Simplify responder handling
         coordinator.isBeingRemoved = true
         
@@ -216,7 +223,7 @@ struct CustomTextView: NSViewRepresentable {
         init(_ parent: CustomTextView) {
             self.parent = parent
             super.init()
-            print("🔧 Coordinator.init - Created coordinator")
+            print("TYPING_DEBUG: 🔧 Coordinator.init - Created coordinator")
             
             // Observe jump to line notifications
             NotificationCenter.default.addObserver(
@@ -228,6 +235,7 @@ struct CustomTextView: NSViewRepresentable {
         }
         
         deinit {
+            print("TYPING_DEBUG: 🗑️ Coordinator.deinit - Coordinator is being deallocated")
             NotificationCenter.default.removeObserver(self)
         }
         
@@ -241,14 +249,22 @@ struct CustomTextView: NSViewRepresentable {
         
         func updateTheme(_ textView: NSTextView) {
             let theme = parent.appTheme
+            let foreground = theme.editorTextColor()
+            let background = theme.editorBackgroundColor()
+            print("TYPING_DEBUG: 🎨 Coordinator.updateTheme - Applying foreground: \(foreground), background: \(background)")
+
+            // Explicitly check if text and background colors are too similar
+            if foreground.isApproximatelyEqual(to: background) {
+                print("TYPING_DEBUG: WARNING Coordinator.updateTheme - Text color and background color are very similar or identical. Text may be invisible. Foreground: \(foreground), Background: \(background)")
+            }
             
             // Update background color
-            textView.backgroundColor = theme.editorBackgroundColor()
+            textView.backgroundColor = background
             
             // Update typing attributes
             var attrs = textView.typingAttributes
-            attrs[.foregroundColor] = theme.editorTextColor()
-            // attrs[.backgroundColor] = theme.editorBackgroundColor() // Removed: Let textView.backgroundColor handle background
+            attrs[.foregroundColor] = foreground
+            // attrs[.backgroundColor] = background // Removed: Let textView.backgroundColor handle background
             attrs[.font] = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular) // Consistent monospaced font
             textView.typingAttributes = attrs
             
@@ -264,19 +280,20 @@ struct CustomTextView: NSViewRepresentable {
         }
         
         func textDidChange(_ notification: Notification) {
+            print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Called. isUpdating: \(isUpdating)")
             guard let textView = notification.object as? NSTextView else {
-                print("❌ textDidChange - Not a valid NSTextView")
+                print("TYPING_DEBUG: ❌ Coordinator.textDidChange - Not a valid NSTextView")
                 return
             }
             guard !isUpdating else {
-                print("⚠️ textDidChange - Blocked: isUpdating = true")
+                print("TYPING_DEBUG: ⚠️ Coordinator.textDidChange - Blocked: isUpdating = true")
                 return
             }
             guard !isBeingRemoved else {
-                print("⚠️ textDidChange - Blocked: isBeingRemoved = true")
+                print("TYPING_DEBUG: ⚠️ Coordinator.textDidChange - Blocked: isBeingRemoved = true")
                 return
             }
-            print("✏️ textDidChange - Text changed to: \(textView.string.prefix(50))...")
+            print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Current text from NSTextView: \(textView.string.prefix(50))...")
             
             let currentText = textView.string
             
@@ -286,49 +303,67 @@ struct CustomTextView: NSViewRepresentable {
                 
                 // Set flag to prevent circular updates
                 isUpdating = true
-                defer { isUpdating = false }
-                
-                // Update foldable regions
-                updateFoldableRegions(for: currentText)
-                
-                // Update line numbers and ruler view
-                if let scrollView = textView.enclosingScrollView,
-                   let rulerView = scrollView.verticalRulerView {
-                    rulerView.needsDisplay = true
+                defer { 
+                    isUpdating = false
+                    print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Reset isUpdating to false")
                 }
+                print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Set isUpdating to true")
                 
-                // Update text binding synchronously to avoid state modification during view updates
-                if parent.text != currentText {
-                    parent.text = currentText
-                }
-                
-                // Update attributed text synchronously
-                if let textStorage = textView.textStorage {
-                    let attributedString = textStorage.copy() as! NSAttributedString
-                    if !attributedString.isEqual(to: parent.attributedText) {
-                        parent.attributedText = attributedString
+                do {
+                    // Update foldable regions
+                    updateFoldableRegions(for: currentText)
+                    
+                    // Update line numbers and ruler view
+                    if let scrollView = textView.enclosingScrollView,
+                       let rulerView = scrollView.verticalRulerView {
+                        rulerView.needsDisplay = true
                     }
-                }
-                
-                // Update bracket highlighting after a short delay to allow syntax highlighting to complete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                    self?.updateBracketHighlighting(in: textView)
+                    
+                    // Update text binding synchronously to avoid state modification during view updates
+                    if parent.text != currentText {
+                        parent.text = currentText
+                        print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Updated parent.text")
+                    } else {
+                        print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - parent.text was already up-to-date")
+                    }
+                    
+                    // Update attributed text synchronously
+                    if let textStorage = textView.textStorage {
+                        let attributedString = textStorage.copy() as! NSAttributedString
+                        if !attributedString.isEqual(to: parent.attributedText) {
+                            parent.attributedText = attributedString
+                            print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Updated parent.attributedText")
+                        } else {
+                            print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - parent.attributedText was already up-to-date")
+                        }
+                    }
+                    
+                    // Update bracket highlighting after a short delay to allow syntax highlighting to complete
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                        self?.updateBracketHighlighting(in: textView)
+                    }
+                } catch {
+                    print("TYPING_DEBUG: ERROR Coordinator.textDidChange - Error during text processing: \(error)")
                 }
             }
         }
         
         func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
-            print("🎹 shouldChangeTextIn - Range: \(affectedCharRange), Replacement: '\(replacementString ?? "nil")', Length: \(replacementString?.count ?? 0)")
+            let replacement = replacementString ?? "nil"
+            print("TYPING_DEBUG: 🎹 Coordinator.shouldChangeTextIn - Range: \(affectedCharRange), Replacement: '\(replacement)', Length: \(replacement.count)")
             
             // Log current state
-            print("   📊 Current state - isUpdating: \(isUpdating), isBeingRemoved: \(isBeingRemoved)")
-            print("   📊 TextView state - isEditable: \(textView.isEditable), window: \(textView.window != nil)")
-            print("   📊 First responder: \(textView.window?.firstResponder == textView)")
+            print("TYPING_DEBUG:    📊 Coordinator.shouldChangeTextIn - Current state: isUpdating = \(isUpdating), isBeingRemoved = \(isBeingRemoved)")
+            print("TYPING_DEBUG:    📊 Coordinator.shouldChangeTextIn - TextView state: isEditable = \(textView.isEditable), window = \(textView.window != nil)")
+            if let window = textView.window {
+                print("TYPING_DEBUG:    📊 Coordinator.shouldChangeTextIn - Window: isKey = \(window.isKeyWindow), isVisible = \(window.isVisible), firstResponder = \(String(describing: window.firstResponder))")
+            }
+            print("TYPING_DEBUG:    📊 Coordinator.shouldChangeTextIn - Is TextView first responder: \(textView.window?.firstResponder == textView)")
             
             // Prevent changes during updates or when being removed
             guard !isUpdating && !isBeingRemoved else {
-                print("   ❌ shouldChangeTextIn - BLOCKED: isUpdating=\(isUpdating), isBeingRemoved=\(isBeingRemoved)")
-                return false 
+                print("TYPING_DEBUG:    ❌ Coordinator.shouldChangeTextIn - BLOCKED: isUpdating=\(isUpdating), isBeingRemoved=\(isBeingRemoved). Returning false.")
+                return false
             }
             
             // Handle smart indentation for newlines
@@ -344,7 +379,7 @@ struct CustomTextView: NSViewRepresentable {
                 }
             }
             
-            print("   ✅ shouldChangeTextIn - ALLOWING text change")
+            print("TYPING_DEBUG:    ✅ Coordinator.shouldChangeTextIn - ALLOWING text change. Returning true.")
             return true
         }
         
@@ -376,13 +411,29 @@ struct CustomTextView: NSViewRepresentable {
         }
         
         @objc private func handleJumpToLine(_ notification: Notification) {
+            print("TYPING_DEBUG:  JUMP_TO_LINE Coordinator.handleJumpToLine - Received notification: \(notification)")
             guard let lineNumber = notification.userInfo?["lineNumber"] as? Int,
-                  let textView = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
+                  let textView = NSApp.keyWindow?.firstResponder as? NSTextView else {
+                print("TYPING_DEBUG: JUMP_TO_LINE Coordinator.handleJumpToLine - Guard failed. LineNumber: \(String(describing: notification.userInfo?["lineNumber"])), TextView: \(String(describing: NSApp.keyWindow?.firstResponder))")
+                return
+            }
+            
+            // Check if this coordinator's parent view is the one that should handle this.
+            // This is a simple check; more robust might involve passing a document ID.
+            guard parent.document.id == (textView.delegate as? Coordinator)?.parent.document.id else {
+                print("TYPING_DEBUG: JUMP_TO_LINE Coordinator.handleJumpToLine - Notification is for a different document. Skipping.")
+                return
+            }
+            
+            print("TYPING_DEBUG: JUMP_TO_LINE Coordinator.handleJumpToLine - Attempting to jump to line: \(lineNumber) in textView: \(textView)")
             
             let text = textView.string
             let lines = text.components(separatedBy: .newlines)
             
-            guard lineNumber > 0 && lineNumber <= lines.count else { return }
+            guard lineNumber > 0 && lineNumber <= lines.count else {
+                print("TYPING_DEBUG: JUMP_TO_LINE Coordinator.handleJumpToLine - Invalid line number: \(lineNumber). Total lines: \(lines.count)")
+                return
+            }
             
             // Calculate character position for the line
             let lineIndex = lineNumber - 1
@@ -395,13 +446,16 @@ struct CustomTextView: NSViewRepresentable {
             // Create range for the line
             let lineLength = lines[lineIndex].count
             let lineRange = NSRange(location: charPosition, length: lineLength)
+            print("TYPING_DEBUG: JUMP_TO_LINE Coordinator.handleJumpToLine - Calculated charPosition: \(charPosition), lineLength: \(lineLength), lineRange: \(lineRange)")
             
             // Scroll to and select the line
             textView.scrollRangeToVisible(lineRange)
             textView.setSelectedRange(lineRange)
+            print("TYPING_DEBUG: JUMP_TO_LINE Coordinator.handleJumpToLine - Scrolled and set selection to range: \(lineRange)")
             
             // Make sure text view is first responder
-            textView.window?.makeFirstResponder(textView)
+            let responderSuccess = textView.window?.makeFirstResponder(textView)
+            print("TYPING_DEBUG: JUMP_TO_LINE Coordinator.handleJumpToLine - Made textView first responder. Success: \(responderSuccess ?? false)")
         }
         
         // MARK: - Code Folding Methods
@@ -683,5 +737,42 @@ class CodeFoldingRulerView: NSRulerView {
     
     override var requiredThickness: CGFloat {
         return 60.0  // Wider to accommodate fold controls
+    }
+}
+
+// Extension to compare NSColor objects
+// Placed here to be self-contained within the file for this exercise.
+// In a larger project, this might go into a dedicated utility file.
+extension NSColor {
+    func isApproximatelyEqual(to color: NSColor, tolerance: CGFloat = 0.05) -> Bool {
+        guard let srgbColorSpace = NSColorSpace.sRGB else {
+            print("TYPING_DEBUG: NSColor.isApproximatelyEqual - Failed to get sRGB color space. Falling back to direct comparison.")
+            // Fallback to direct comparison if sRGB space is unavailable
+            return self == color 
+        }
+
+        // Attempt to convert both colors to the sRGB color space
+        guard let c1 = self.usingColorSpace(srgbColorSpace), 
+              let c2 = color.usingColorSpace(srgbColorSpace) else {
+            print("TYPING_DEBUG: NSColor.isApproximatelyEqual - Failed to convert one or both colors to sRGB. Falling back to direct comparison.")
+            // Fallback if conversion fails
+            return self == color 
+        }
+
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+
+        // Get RGBA components
+        c1.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        c2.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        
+        // Optional: Log the component values for debugging color comparison issues
+        // print("TYPING_DEBUG: ColorComp C1: R\(String(format: "%.2f", r1)) G\(String(format: "%.2f", g1)) B\(String(format: "%.2f", b1)) | C2: R\(String(format: "%.2f", r2)) G\(String(format: "%.2f", g2)) B\(String(format: "%.2f", b2))")
+
+        // Compare RGB components within the given tolerance
+        // Alpha is not compared here as background is usually opaque and text visibility depends on RGB contrast.
+        return abs(r1 - r2) < tolerance &&
+               abs(g1 - g2) < tolerance &&
+               abs(b1 - b2) < tolerance
     }
 }
