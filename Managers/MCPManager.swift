@@ -15,6 +15,11 @@ class MCPManager: ObservableObject {
         // self.availablePlugins.append(MyDesktopCommanderPlugin())
         // self.availablePlugins.append(MyAppleScriptPlugin())
         print("MCPManager: Plugin loading would occur here.")
+
+        // Manually load the TimestampPlugin
+        let timestampPlugin = TimestampPlugin()
+        self.availablePlugins.append(timestampPlugin)
+        print("MCPManager: Loaded TimestampPlugin. Total plugins: \(availablePlugins.count)")
     }
 
     func executePlugin(byId id: String, context: MCPContext) throws -> MCPResult {

@@ -30,6 +30,10 @@ struct ContentView: View {
     // Force initial render state
     @State private var hasAppeared = false
     
+    // State for plugin execution alert
+    @State private var pluginResultMessage: String = ""
+    @State private var showingPluginAlert: Bool = false
+
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
@@ -83,6 +87,9 @@ struct ContentView: View {
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+        }
+        .alert(isPresented: $showingPluginAlert) {
+            Alert(title: Text("Plugin Result"), message: Text(pluginResultMessage), dismissButton: .default(Text("OK")))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .preferredColorScheme(appState.colorScheme)
@@ -147,6 +154,12 @@ struct ContentView: View {
     @ViewBuilder
     private func mainContentView() -> some View {
         VStack(spacing: 0) {
+            // Button to run Timestamp Plugin
+            Button("Run Timestamp Plugin") {
+                executeTimestampPlugin()
+            }
+            .padding()
+
             // Tab Bar
             if !appState.tabs.isEmpty {
                 TabBarView()
@@ -162,6 +175,48 @@ struct ContentView: View {
             if appState.showStatusBar {
                 statusBarView() // Further extraction for clarity
             }
+        }
+    }
+
+    // MARK: - Plugin Execution
+    private func executeTimestampPlugin() {
+        let manager = appState.mcpManager
+
+        // Create a context for the plugin
+        // For currentText, selectedText, currentFileURL, we'll use placeholders
+        // as fully integrating them depends on the active editor state, which is complex.
+        let currentDoc = appState.currentTab.flatMap { tabIndex -> Document? in
+            guard tabIndex >= 0 && tabIndex < appState.tabs.count else { return nil }
+            return appState.tabs[tabIndex]
+        }
+
+        let context = MCPContext(
+            appState: appState,
+            currentText: currentDoc?.text,
+            selectedText: nil, // Placeholder, would need to get from actual text view
+            currentFileURL: currentDoc?.fileURL
+        )
+
+        let pluginID = "com.example.timestamp"
+
+        do {
+            let result = try manager!.executePlugin(byId: pluginID, context: context)
+            print("Timestamp Plugin executed successfully.")
+            if let insertedText = result.insertedText {
+                self.pluginResultMessage = "Timestamp Plugin Output: \(insertedText)"
+                // Here you would typically insert the text into the active editor
+            } else if let message = result.message {
+                self.pluginResultMessage = message
+            } else {
+                self.pluginResultMessage = "Plugin executed successfully, but no text was inserted."
+            }
+            self.showingPluginAlert = true
+            print("Timestamp Plugin executed successfully. Message: \(self.pluginResultMessage)")
+
+        } catch {
+            self.pluginResultMessage = "Error executing Timestamp Plugin: \(error.localizedDescription)"
+            self.showingPluginAlert = true
+            print(self.pluginResultMessage)
         }
     }
 
