@@ -46,6 +46,60 @@ class AIManager: ObservableObject {
         setupBindings()
     }
 
+    func getAvailableProviders() -> [AIProviderType] {
+        var available: [AIProviderType] = []
+
+        // Check Ollama: For Ollama, we might assume it's available if the service could be initialized.
+        // A more robust check could involve a quick ping to the endpoint, but for now,
+        // let's assume if ollamaService is non-nil, it's potentially available.
+        // Or, simply rely on the user to know if their local Ollama is running.
+        // For simplicity in this step, we'll always list Ollama as an option,
+        // as it doesn't require an API key. Errors will be handled at runtime if it's not reachable.
+        // Considering the current setupServices logic, if ollamaService is non-nil, it means initialization
+        // did not throw an error for invalid URL format, which is a basic check.
+        if self.ollamaService != nil {
+             available.append(.ollama)
+        } else {
+            // Fallback: always list Ollama as an option, user has to ensure it's running.
+            // This might be preferable if initial setup fails due to network but Ollama could be started later.
+            available.append(.ollama)
+        }
+
+
+        // Check OpenAI: Requires API key and successful service initialization.
+        if openAIService != nil && !aiSettings.openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            available.append(.openAI)
+        }
+
+        // Check Anthropic: Requires API key and successful service initialization.
+        if anthropicService != nil && !aiSettings.anthropicAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            available.append(.anthropic)
+        }
+
+        // To ensure a consistent order and avoid duplicates if logic changes, convert to Set then back to Array.
+        // However, the current logic should not produce duplicates.
+        // For now, the order of appending determines the order.
+        // A more sophisticated approach might sort them or prioritize the user's preferred provider.
+        // Example: Sort alphabetically or by a predefined order.
+        // For now, the order is: Ollama (if available), OpenAI (if available), Anthropic (if available).
+
+        // Remove duplicates (if any, though current logic shouldn't create them) and maintain a defined order
+        var uniqueAvailable: [AIProviderType] = []
+        let allPossible: [AIProviderType] = [.ollama, .openAI, .anthropic] // Desired order
+
+        for providerType in allPossible {
+            if available.contains(providerType) && !uniqueAvailable.contains(providerType) {
+                uniqueAvailable.append(providerType)
+            }
+        }
+
+        // If for some reason all checks fail but there's a preferred provider set,
+        // it might be good to still list it, but this could be confusing if it's truly unavailable.
+        // For now, only list if checks pass.
+
+        return uniqueAvailable.isEmpty ? [.ollama] : uniqueAvailable // Ensure at least Ollama is always an option as a fallback
+    }
+
     private func setupServices() {
         setupOllamaService()
         setupOpenAIService()

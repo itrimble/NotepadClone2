@@ -167,6 +167,7 @@ class AppState: ObservableObject {
     // AI Settings & Manager
     @Published var aiSettings: AISettings! // Should be initialized before AIManager
     @Published var aiManager: AIManager!
+@Published var mcpManager: MCPManager! // New: MCPManager
 
     // Terminal Manager
     @Published var terminalManager = TerminalManager()
@@ -236,6 +237,7 @@ class AppState: ObservableObject {
     init() {
         // Initialize AI Settings first as AIManager depends on it
         self.aiSettings = AISettings()
+        self.mcpManager = MCPManager() // New: Initialize MCPManager
         
         // Initialize AI Manager
         self.aiManager = AIManager(aiSettings: self.aiSettings)

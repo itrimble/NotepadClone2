@@ -40,7 +40,7 @@ struct PreferencesWindow: View {
                 .tag(PreferenceTabType.editor)
             
             // AI Settings Tab
-            AISettingsView()
+            AISettingsView(aiSettings: appState.aiSettings) // Pass the instance from appState
                 .tabItem {
                     Label("AI", systemImage: "brain.head.profile")
                 }
@@ -57,7 +57,7 @@ struct PreferencesWindow: View {
 }
 
 struct AISettingsView: View {
-    @StateObject private var aiSettings = AISettings() // Manages its own AISettings instance
+    @ObservedObject var aiSettings: AISettings // Changed from @StateObject
 
     var body: some View {
         Form {
