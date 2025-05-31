@@ -29,7 +29,8 @@ struct ContentView: View {
     
     // Force initial render state
     @State private var hasAppeared = false
-    
+    @State private var editorVisibleRect: CGRect = .zero // Added for DocumentMapView
+
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
@@ -203,21 +204,31 @@ struct ContentView: View {
            currentIndex >= 0 && currentIndex < appState.tabs.count {
             
             let currentDocument = appState.tabs[currentIndex]
-            
-            if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
-                markdownPreviewOrSplitView(for: currentDocument)
-            } else {
-                CustomTextView(
-                    text: $appState.tabs[currentIndex].text,
-                    attributedText: $appState.tabs[currentIndex].attributedText,
-                    appTheme: appState.appTheme,
-                    showLineNumbers: appState.showLineNumbers,
-                    language: appState.tabs[currentIndex].language,
-                    document: appState.tabs[currentIndex]
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id("tab_\(currentIndex)_\(currentDocument.id)")
-                .focusable(true)
+
+            HStack(spacing: 0) {
+                if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
+                    markdownPreviewOrSplitView(for: currentDocument)
+                        .layoutPriority(1) // Ensure editor takes precedence
+                } else {
+                    CustomTextView(
+                        text: $appState.tabs[currentIndex].text,
+                        attributedText: $appState.tabs[currentIndex].attributedText,
+                        appTheme: appState.appTheme,
+                        showLineNumbers: appState.showLineNumbers,
+                        language: appState.tabs[currentIndex].language,
+                        document: appState.tabs[currentIndex]
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id("tab_\(currentIndex)_\(currentDocument.id)")
+                    .focusable(true)
+                    .layoutPriority(1) // Ensure editor takes precedence
+                }
+
+                // Add DocumentMapView
+                // Note: appState.tabs[currentIndex] is already validated by the outer if-let
+                DocumentMapView(documentText: currentDocument.attributedText, visibleRect: editorVisibleRect)
+                    .frame(width: 80) // Adjust width as needed
+                    .environmentObject(appState)
             }
         } else {
             // Fallback for invalid tab state
@@ -345,6 +356,36 @@ struct ContentView: View {
             // Force refresh when theme changes
             refreshTrigger?.refresh()
         }
+
+        // Observe custom text view scroll events
+        NotificationCenter.default.addObserver(
+            forName: .customTextViewDidScroll,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let userInfo = notification.userInfo,
+                  let newVisibleRect = userInfo["visibleRect"] as? CGRect,
+                  let notificationDocumentId = userInfo["documentId"] as? UUID else {
+                return
+            }
+
+            // For single view mode or primary pane in split view
+            if let currentDocIndex = self.appState.currentTab,
+               currentDocIndex >= 0 && currentDocIndex < self.appState.tabs.count,
+               let currentDocId = self.appState.tabs[currentDocIndex].id,
+               currentDocId == notificationDocumentId {
+                if self.editorVisibleRect != newVisibleRect {
+                    self.editorVisibleRect = newVisibleRect
+                    // print("ContentView: Updated editorVisibleRect for current tab \(currentDocId) to \(newVisibleRect)")
+                }
+            }
+            // TODO: Add logic for split view's secondary pane if a separate visibleRect is needed.
+            // If the secondary pane in split view also needs its own minimap state,
+            // you would check against `self.appState.splitViewTabIndex` and update a
+            // hypothetical `splitEditorVisibleRect` state variable.
+            // For now, `editorVisibleRect` is shared, primarily reflecting the active/main CustomTextView.
+        }
     }
     
     private func setupSelectionObserver() {
@@ -385,30 +426,37 @@ struct ContentView: View {
         let document = appState.tabs[index]
         
         return AnyView(
-            VStack(spacing: 0) {
-                // Optional header showing which file is open
-                HStack {
-                    Image(systemName: "doc.text")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
-                    Text(document.displayName)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    // Optional header showing which file is open
+                    HStack {
+                        Image(systemName: "doc.text")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                        Text(document.displayName)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color(appState.appTheme.tabBarBackgroundColor()).opacity(0.5))
+
+                    CustomTextView(
+                        text: $appState.tabs[index].text, // Binding directly to the tab's text
+                        attributedText: $appState.tabs[index].attributedText, // Binding for attributed text
+                        appTheme: appState.appTheme,
+                        showLineNumbers: appState.showLineNumbers,
+                        language: document.language, // Use document's language
+                        document: document // Pass the document itself
+                    )
+                    .id("split_pane_\(index)_\(document.id)_\(refreshTrigger.id)") // Ensure unique ID
+                    .layoutPriority(1) // Ensure editor takes precedence
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color(appState.appTheme.tabBarBackgroundColor()).opacity(0.5))
                 
-                CustomTextView(
-                    text: $appState.tabs[index].text, // Binding directly to the tab's text
-                    attributedText: $appState.tabs[index].attributedText, // Binding for attributed text
-                    appTheme: appState.appTheme,
-                    showLineNumbers: appState.showLineNumbers,
-                    language: document.language, // Use document's language
-                    document: document // Pass the document itself
-                )
-                .id("split_pane_\(index)_\(document.id)_\(refreshTrigger.id)") // Ensure unique ID
+                DocumentMapView(documentText: document.attributedText, visibleRect: editorVisibleRect)
+                    .frame(width: 80) // Adjust width as needed
+                    .environmentObject(appState)
             }
         )
     }

@@ -78,6 +78,12 @@ struct CustomTextView: NSViewRepresentable {
         
         // Set up initial theme
         context.coordinator.updateTheme(textView)
+        context.coordinator.textView = textView // Store textView instance
+
+        // Setup bounds observer for scrolling
+        if let clipView = scrollView.contentView as? NSClipView {
+            context.coordinator.setupBoundsObserver(for: clipView)
+        }
         
         // Set initial text with proper attributes
         let defaultAttributes = context.coordinator.defaultAttributes()
@@ -203,6 +209,11 @@ struct CustomTextView: NSViewRepresentable {
         if let textView = nsView.documentView as? NSTextView {
             textView.delegate = nil
             
+            // Remove bounds observer
+            if let scrollView = textView.enclosingScrollView, let clipView = scrollView.contentView as? NSClipView {
+                NotificationCenter.default.removeObserver(coordinator, name: NSView.boundsDidChangeNotification, object: clipView)
+            }
+
             // Let AppKit handle responder transitions naturally
             // DO NOT call resignFirstResponder() directly
         }
@@ -214,6 +225,7 @@ struct CustomTextView: NSViewRepresentable {
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CustomTextView
+        weak var textView: NSTextView? // Added property to store textView
         private var isUpdating = false
         private var lastText = ""
         var isBeingRemoved = false // Track if view is being dismantled
@@ -230,6 +242,14 @@ struct CustomTextView: NSViewRepresentable {
                 self,
                 selector: #selector(handleJumpToLine(_:)),
                 name: .jumpToLine,
+                object: nil
+            )
+
+            // Observe minimap navigation clicks
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleMinimapNavigation(_:)),
+                name: .minimapNavigateToRatio,
                 object: nil
             )
         }
@@ -501,6 +521,76 @@ struct CustomTextView: NSViewRepresentable {
             
             // Apply bracket highlighting
             BracketMatcher.highlightBrackets(in: textView, theme: syntaxTheme)
+        }
+
+        // MARK: - Scroll Handling and Minimap Navigation
+
+        func setupBoundsObserver(for clipView: NSClipView) {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleBoundsChange(_:)),
+                name: NSView.boundsDidChangeNotification,
+                object: clipView // Observe the specific clipView
+            )
+        }
+
+        @objc func handleBoundsChange(_ notification: Notification) {
+            guard let clipView = notification.object as? NSClipView,
+                  let textView = clipView.documentView as? NSTextView else {
+                return
+            }
+            // Ensure it's for the correct text view instance this coordinator manages
+            guard textView === self.textView else { return }
+
+            postVisibleRectUpdate(for: textView)
+        }
+
+        @objc func handleMinimapNavigation(_ notification: Notification) {
+            guard let clickYRatio = notification.object as? CGFloat,
+                  let textView = self.textView,
+                  let layoutManager = textView.layoutManager,
+                  let textContainer = textView.textContainer else {
+                print("TYPING_DEBUG: MINIMAP_NAV - Guard failed. clickYRatio: \(String(describing: notification.object)), textView: \(String(describing: self.textView))")
+                return
+            }
+
+            // Document ID check: Ensure this navigation is for the document this coordinator is managing.
+            // This check is important if notifications are not instance-specific.
+            // Here, we assume that if this coordinator's textView is active, it's the target.
+            // A more robust way would be to pass document ID in the notification and check it here.
+            // For now, direct handling is okay as CustomTextView instances are distinct.
+
+            let totalContentHeight = layoutManager.usedRect(for: textContainer).height
+            guard totalContentHeight > 0 else {
+                print("TYPING_DEBUG: MINIMAP_NAV - Total content height is 0.")
+                return
+            }
+
+            let targetY = totalContentHeight * clickYRatio
+            // Ensure targetY is within bounds [0, totalContentHeight - visibleRect.height (or 1 if too small)]
+            // For simplicity, we scroll to a point, ensuring it's not beyond the very end.
+            let clampedTargetY = min(targetY, max(0, totalContentHeight - textView.visibleRect.height > 0 ? totalContentHeight - textView.visibleRect.height : 1))
+            let targetRect = CGRect(x: 0, y: clampedTargetY, width: 1, height: 1)
+
+            print("TYPING_DEBUG: MINIMAP_NAV - Navigating to ratio: \(clickYRatio), targetY: \(targetY), clampedTargetY: \(clampedTargetY), totalHeight: \(totalContentHeight)")
+            textView.scrollToVisible(targetRect)
+
+            // Manually trigger visible rect update after scrolling, as bounds change might be async
+            DispatchQueue.main.async {
+                 self.postVisibleRectUpdate(for: textView)
+            }
+        }
+
+        func postVisibleRectUpdate(for textView: NSTextView) {
+            let visibleRect = textView.visibleRect
+            // Ensure document ID is available and correct
+            // parent.document.id should be accessible here
+            NotificationCenter.default.post(
+                name: .customTextViewDidScroll,
+                object: nil, // Or pass `textView` if specific sender is needed by observers
+                userInfo: ["visibleRect": visibleRect, "documentId": parent.document.id]
+            )
+            print("TYPING_DEBUG: SCROLL_UPDATE - Posted .customTextViewDidScroll with rect: \(visibleRect), docID: \(parent.document.id)")
         }
     }
 }
