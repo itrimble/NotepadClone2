@@ -52,6 +52,7 @@
 * `ContentView.swift`: Main interface of the application combining tab bar, text editor, status bar, file explorer, and terminal panel. Supports split pane editing and drag & drop file opening.
 * `TabBarView.swift`: Custom tab implementation for document switching with theme-aware styling.
 * `StatusBar.swift`: Enhanced status bar showing word count, character count, line:column position, selection info, and file encoding.
+* `DocumentMapView.swift`: Displays a clickable miniature overview of the document content, indicating the visible portion of the editor for quick navigation.
 * `PreferencesWindow.swift`: Settings interface for the application.
 * `SplitEditorView.swift`: Split pane editor view for side-by-side document editing.
 * `FileExplorerView.swift`: File explorer sidebar with tree view, file operations (create, rename, delete), and context menus.
@@ -64,7 +65,7 @@
 ### Utilities
 * `SyntaxHighlighter.swift`: Provides syntax highlighting for various programming languages.
 * `ThemeConstants.swift`: Defines the available themes (including new "Aqua", "Turbo Pascal", "Mac OS 8") and their visual properties.
-* `Notifications.swift`: Central place for all notification name declarations, including new code folding notifications and jump to line.
+* `Notifications.swift`: Central place for all notification name declarations, including new code folding notifications and jump to line, `.minimapNavigateToRatio`, and `.customTextViewDidScroll`.
 * `CodeFolder.swift`: Detects foldable code regions (functions, classes, blocks) for multiple programming languages.
 * `BracketMatcher.swift`: Provides intelligent bracket matching and highlighting functionality.
 * `SmartIndenter.swift`: Implements language-aware automatic indentation with configurable rules.
@@ -231,5 +232,12 @@ Based on Notepad++ design analysis and current progress, remaining features incl
 
 * Phase 2.6 (Code Intelligence) has been completed
 * Phase 3 (File Explorer) has been completed - basic operations done, drag & drop and file watching remain
+* **Document Map/Minimap Feature (2024-08-01):**
+  - Created `DocumentMapView.swift` for displaying a clickable minimap.
+  - Integrated `DocumentMapView` into `ContentView.swift`, appearing alongside the editor.
+  - Implemented click-to-navigate: Minimap clicks scroll the main editor.
+  - Implemented visible area feedback: Editor scrolls update the minimap's visible area indicator.
+  - Centralized `minimapNavigateToRatio` and added `customTextViewDidScroll` to `Utilities/Notifications.swift`.
+  - Added unit tests (`DocumentMapViewTests.swift`, `CustomTextViewCoordinatorTests.swift`) for the new functionality.
 * Next phase: Document map/minimap implementation
 * See `prompt_plan.md` for detailed task tracking

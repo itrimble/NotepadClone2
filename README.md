@@ -47,6 +47,7 @@ A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with
 - 🎨 **Customizable Themes** - System, Light, Dark, Notepad++, Material Dark, Nord ✅
 - 🚀 **Performance Optimized** - Responsive typing and smooth scrolling ✅
 - 🔧 **Native macOS Integration** - Follows macOS design guidelines ✅
+- 🗺️ **Document Map/Minimap** - Displays a miniature overview of the document, showing the current visible portion and allowing quick navigation by clicking. ✅
 
 ## Why NotepadClone2?
 
@@ -477,7 +478,7 @@ NOTEPAD_DEBUG=1 open NotepadClone2.app
 
 ### Version 3.2.0 (Next)
 - [ ] Integrate terminal into UI (files ready)
-- [ ] Document map/minimap
+- [x] Document map/minimap
 - [ ] Enhanced auto-completion
 - [ ] Drag & drop in file explorer
 - [ ] File watching for external changes

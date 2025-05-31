@@ -207,14 +207,14 @@ Example prompt:
   - [ ] Add terminal files to Xcode project (pending)
   - [ ] Enable terminal UI integration (pending)
 
-### Phase 3.2: Pending UI Improvements
-- [ ] Implement document map/minimap
-  - [ ] Create miniature view
-  - [ ] Add navigation controls
-  - [ ] Sync with main editor
-  - [ ] Highlight visible area
-  - [ ] Clickable navigation
-  - [ ] Theme-aware rendering
+### Phase 3.2: Document Map/Minimap ✅ COMPLETED (2024-08-01)
+- [x] Implement document map/minimap
+  - [x] Create miniature view (`DocumentMapView.swift`)
+  - [x] Add navigation controls (click to navigate implemented)
+  - [x] Sync with main editor (visible area indicator updates with scroll)
+  - [x] Highlight visible area (indicator shows this)
+  - [x] Clickable navigation (gesture posts notification, editor responds)
+  - [x] Theme-aware rendering (basic theming for background and indicator)
 
 ### Phase 4: Advanced Editing Features
 - [ ] Column Mode & Advanced Editing
@@ -459,18 +459,13 @@ feat: Add split pane view with horizontal/vertical options
 - ✅ Cleaned up all compilation warnings
 
 ### Next Priorities
-1. **Add Files to Xcode Project**
+1. **Add Files to Xcode Project** (Manual Task)
    - Terminal files (Terminal.swift, TerminalManager.swift, TerminalView.swift, TerminalPanelView.swift)
    - Markdown files (MarkdownPreviewView.swift, MarkdownSplitView.swift)
    - Find in Files UI files
    - Code folding UI files
-
-2. **Document Map/Minimap**
-   - Miniature view of entire document
-   - Click to navigate functionality
-   - Visual indicator of current viewport
-
-3. **Enhanced File Explorer**
+   - DocumentMapView.swift (Newly added)
+2. **Enhanced File Explorer**
    - Drag and drop support
    - Remember collapsed state
    - File watching for external changes
