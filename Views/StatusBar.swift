@@ -1,13 +1,14 @@
 import SwiftUI
 
 struct StatusBar: View {
+    @EnvironmentObject var appState: AppState // Add this line
     let characterCount: Int
     let wordCount: Int
     let lineNumber: Int
     let columnNumber: Int
     let selectedRange: NSRange?
     let encoding: String.Encoding
-    let currentProvider: AIProviderType // Added new property
+    // Removed: let currentProvider: AIProviderType
     
     // Click action handlers
     var onLineColumnClick: (() -> Void)?
@@ -90,14 +91,24 @@ struct StatusBar: View {
             
             Spacer()
             
-            // AI Status (Static for now)
-            Divider()
-                .frame(height: 12)
-            
-            Text("AI: \(currentProvider.displayName)") // Updated to be dynamic
+            // Column Mode Indicator
+            if appState.isColumnModeActive {
+                Text("COL")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Divider()
+                    .frame(height: 12)
+            }
+
+            // AI Status (Now using appState)
+            // Consider if a Divider is needed here based on COL indicator's presence
+            Text("AI: \(appState.aiManager.settings.currentProvider.displayName)")
                 .font(.caption)
                 .foregroundColor(.secondary)
             
+            Divider() // Keep a divider before Encoding for consistent spacing
+                .frame(height: 12)
+
             // Encoding (clickable)
             Button(action: {
                 onEncodingClick?()
@@ -161,9 +172,10 @@ struct StatusBar: View {
             lineNumber: 5,
             columnNumber: 15,
             selectedRange: nil,
-            encoding: .utf8,
-            currentProvider: .ollama // Added for preview
+            encoding: .utf8
+            // currentProvider removed
         )
+        .environmentObject(AppState()) // Add environmentObject
         .frame(width: 600)
         
         StatusBar(
@@ -172,9 +184,10 @@ struct StatusBar: View {
             lineNumber: 142,
             columnNumber: 37,
             selectedRange: NSRange(location: 100, length: 25),
-            encoding: .utf16,
-            currentProvider: .openAI // Added for preview
+            encoding: .utf16
+            // currentProvider removed
         )
+        .environmentObject(AppState()) // Add environmentObject
         .frame(width: 600)
     }
 }

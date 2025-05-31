@@ -123,6 +123,7 @@ class AppState: ObservableObject {
     @Published var tabs: [Document] = []
     @Published var currentTab: Int? = nil
     @Published var showStatusBar = true
+    @Published var isColumnModeActive: Bool = false // New property for Column Mode
     
     // Split view support
     @Published var splitViewEnabled = false
