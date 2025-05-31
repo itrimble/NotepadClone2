@@ -143,8 +143,8 @@ class AIManager: ObservableObject {
         }
     }
 
-    func submitPrompt(prompt: String, completion: @escaping (Result<AIResponse, Error>) -> Void) {
-        print("AIManager: Submitting prompt using \(currentProviderType.displayName).")
+    func submitPrompt(prompt: String, contextMessage: String? = nil, completion: @escaping (Result<AIResponse, Error>) -> Void) {
+        print("AIManager: Submitting prompt using \(currentProviderType.displayName). Context: \(contextMessage ?? "None")")
         
         let service: AIService?
         var serviceNameForError = currentProviderType.displayName
@@ -193,40 +193,50 @@ class AIManager: ObservableObject {
 
         DispatchQueue.main.async {
             self.isProcessing = true
-            self.latestResponseContent = "Processing..." 
+            if let contextMsg = contextMessage, !contextMsg.isEmpty {
+                self.latestResponseContent = "\(contextMsg)\n\nProcessing..."
+            } else {
+                self.latestResponseContent = "Processing..."
+            }
             self.lastError = nil
         }
 
         activeService.sendPrompt(prompt) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                self.isProcessing = false
+                // isProcessing will be set to false only after this block,
+                // or if it was already false due to an early exit.
+
                 switch result {
                 case .success(let response):
+                    self.isProcessing = false // Processing done
                     self.lastFullResponse = response
                     self.latestResponseContent = response.content
                     self.lastError = nil
                     print("AIManager: Received success response from \(self.currentProviderType.displayName).")
                 case .failure(let error):
+                    self.isProcessing = false // Processing done (with error)
                     self.lastFullResponse = nil
-                    let errorMessage: String
+                    let baseErrorMessage: String
                     if let aiError = error as? AIServiceError {
                         switch aiError {
-                        case .invalidURL: errorMessage = "Error: Invalid API Endpoint URL."
-                        case .networkError(let netErr): errorMessage = "Error: Network - \(netErr.localizedDescription)"
-                        case .invalidResponse: errorMessage = "Error: Invalid server response."
-                        case .jsonParsingError: errorMessage = "Error: Cannot understand server response."
-                        case .noData: errorMessage = "Error: No data from server."
-                        case .apiError(let msg): errorMessage = "API Error: \(msg)"
+                        case .invalidURL: baseErrorMessage = "Invalid API Endpoint URL."
+                        case .networkError(let netErr): baseErrorMessage = "Network Error: \(netErr.localizedDescription)"
+                        case .invalidResponse: baseErrorMessage = "Invalid server response."
+                        case .jsonParsingError: baseErrorMessage = "Cannot understand server response."
+                        case .noData: baseErrorMessage = "No data received from server."
+                        case .apiError(let msg): baseErrorMessage = msg // API specific error message
                         }
                     } else {
-                        errorMessage = "Error: \(error.localizedDescription)"
+                        baseErrorMessage = error.localizedDescription
                     }
-                    self.latestResponseContent = errorMessage
-                    self.lastError = error 
+                    // Standardize user-facing error message
+                    let userFriendlyErrorMessage = "AI Error: \(baseErrorMessage)"
+                    self.latestResponseContent = userFriendlyErrorMessage
+                    self.lastError = error // Keep the original error for internal logging if needed
                     print("AIManager: Received error from \(self.currentProviderType.displayName): \(error)")
                 }
-                completion(result)
+                completion(result) // Call completion handler
             }
         }
     }

@@ -227,7 +227,8 @@ struct ContentView: View {
                         appTheme: appState.appTheme,
                         showLineNumbers: appState.showLineNumbers,
                         language: appState.tabs[currentIndex].language,
-                        document: appState.tabs[currentIndex]
+                        document: appState.tabs[currentIndex],
+                        appState: appState // Pass appState here
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("tab_\(currentIndex)_\(currentDocument.id)")
@@ -498,7 +499,8 @@ struct ContentView: View {
                     appTheme: appState.appTheme,
                     showLineNumbers: appState.showLineNumbers,
                     language: document.language, // Use document's language
-                    document: document // Pass the document itself
+                    document: document, // Pass the document itself
+                    appState: appState // Pass appState here
                 )
                 .id("split_pane_\(index)_\(document.id)_\(refreshTrigger.id)") // Ensure unique ID
             }
