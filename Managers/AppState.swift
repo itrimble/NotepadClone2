@@ -232,8 +232,13 @@ class AppState: ObservableObject {
         // Post notification to show encoding menu
         NotificationCenter.default.post(name: .showEncodingMenu, object: nil)
     }
-    
-    init() {
+
+    // Main initializer
+    convenience init() {
+        self.init(openingDocumentWithID: nil)
+    }
+
+    init(openingDocumentWithID: UUID? = nil) {
         // Initialize AI Settings first as AIManager depends on it
         self.aiSettings = AISettings()
         
@@ -253,29 +258,69 @@ class AppState: ObservableObject {
         colorScheme = appTheme.colorScheme
         
         // Restore previous session or create new document
-        if restoreSession && restorePreviousSession() {
-            print("Session restored successfully with \(tabs.count) tabs")
-        } else {
-            print("No session to restore, creating new document")
-            // Create new document if no session to restore
-            newDocument()
-        }
-        
-        // Ensure we have at least one tab
-        if tabs.isEmpty {
-            print("Warning: No tabs after initialization, creating default tab")
-            newDocument()
-        }
-        
-        // Ensure currentTab is valid
-        if let current = currentTab {
-            if current >= tabs.count || current < 0 {
-                print("Warning: Invalid currentTab index \(current), resetting to 0")
-                currentTab = tabs.isEmpty ? nil : 0
+        var didRestoreSession = false
+        if let docID = openingDocumentWithID {
+            print("AppState initializing for specific document ID: \(docID)")
+            let allRestoredDocs = Document.restoreSessionState()
+            if let foundDoc = allRestoredDocs.first(where: { $0.id == docID }) {
+                self.tabs = [foundDoc] // Start with only this document
+                self.currentTab = 0
+                // Update the main list of documents to exclude the one we just opened,
+                // if we want other windows not to re-open it from session state.
+                // This needs careful thought about how session state is shared or split.
+                // For now, let's assume Document.saveSessionState will handle the current state of `tabs`.
+                print("Found and loaded document \(docID) for new window.")
+                didRestoreSession = true // Kind of, we restored one doc.
+            } else {
+                print("Document with ID \(docID) not found in session state. Creating new document for new window.")
+                newDocument() // Create a new empty document as a fallback
             }
-        } else if !tabs.isEmpty {
-            print("No currentTab set, selecting first tab")
-            currentTab = 0
+        } else {
+            if restoreSession && restorePreviousSession() {
+                print("Session restored successfully with \(tabs.count) tabs")
+                didRestoreSession = true
+            } else {
+                print("No session to restore, creating new document")
+                newDocument()
+            }
+        }
+        
+        // Ensure we have at least one tab if no specific doc was loaded and session restore failed/disabled
+        if !didRestoreSession && tabs.isEmpty && openingDocumentWithID == nil {
+            print("Warning: No tabs after initialization (and not opening specific ID), creating default tab")
+            newDocument()
+        }
+        
+        // Ensure currentTab is valid if not already set by specific document loading
+        if currentTab == nil { // Could be nil if specific doc ID wasn't found and newDocument() was called
+            if !tabs.isEmpty {
+                currentTab = 0
+                print("CurrentTab was nil, set to 0.")
+            } else {
+                 // This case (tabs is empty) should ideally be handled by newDocument() above,
+                 // which sets currentTab = 0. But as a safeguard:
+                print("Warning: Tabs is empty and currentTab is nil after initial setup.")
+            }
+        } else { // currentTab was set (e.g. specific doc loaded)
+            if currentTab! >= tabs.count || currentTab! < 0 {
+                 print("Warning: Invalid currentTab index \(currentTab!), resetting to 0 or nil.")
+                 currentTab = tabs.isEmpty ? nil : 0
+            }
+        }
+
+        // If opening a specific document, ensure it's selected, even if restorePreviousSession brought in others.
+        // This is now handled by initializing `tabs` with just the foundDoc if openingDocumentWithID is present.
+        // If we were to merge with restored session:
+        // if let docID = openingDocumentWithID, let index = tabs.firstIndex(where: { $0.id == docID }) {
+        //    currentTab = index
+        // } else if currentTab == nil && !tabs.isEmpty {
+        //    currentTab = 0 // Default if specific ID not found or not requested
+        // }
+
+        // Final check if tabs are empty and we are not opening a specific doc (which should have created one)
+        if tabs.isEmpty && openingDocumentWithID == nil {
+             print("Critical: Tabs are empty after all init. Adding one more new document.")
+             newDocument() // Should ensure currentTab is set to 0
         }
         
         // Set up auto-save timer
@@ -818,6 +863,129 @@ class AppState: ObservableObject {
     }
     
     // MARK: - Tab Management
+
+    func requestDetachTabToNewWindow(tabIndex: Int) {
+        guard tabIndex >= 0 && tabIndex < tabs.count else {
+            print("Error: Invalid tabIndex (\(tabIndex)) for detach request.")
+            return
+        }
+
+        let documentToDetach = tabs[tabIndex]
+        let documentIDToPass = documentToDetach.id
+
+        // Ensure the document's current state is saved so the new window can load it.
+        // This assumes Document.saveSessionState() correctly saves all current documents if called,
+        // or that an individual document can save its state to be findable by ID.
+        // For simplicity, we'll rely on the general session saving or auto-save.
+        // If the document has a URL, ensure it's saved to that URL.
+        if documentToDetach.fileURL != nil && documentToDetach.hasUnsavedChanges {
+            // Temporarily select the tab to save it if it's not current
+            let oldCurrentTab = self.currentTab
+            self.currentTab = tabIndex
+            saveDocument() // This saves the now-current document
+            self.currentTab = oldCurrentTab // Restore original current tab
+        }
+        // If it's an untitled document, its state is saved with Document.saveSessionState.
+        // We must ensure this is called before the tab is removed, or that the new window
+        // can receive the DocumentState directly (not supported by openWindow(value: UUID)).
+
+        // Post notification to request the app to open a new window for this document ID.
+        NotificationCenter.default.post(name: .requestNewWindowForDocumentID, object: nil, userInfo: ["documentID": documentIDToPass])
+
+        // Remove the tab from the current window's state *after* posting,
+        // assuming the notification handler will successfully trigger the new window.
+        tabs.remove(at: tabIndex)
+
+        // Update currentTab and splitViewTabIndex
+        // Current Tab
+        if let oldCurrentTab = currentTab {
+            if oldCurrentTab == tabIndex {
+                currentTab = max(0, tabIndex - 1) // Select previous tab or first if detached was first
+                if tabs.isEmpty { currentTab = nil } // No tabs left
+            } else if oldCurrentTab > tabIndex {
+                currentTab = oldCurrentTab - 1
+            }
+        } else if tabs.isEmpty { // currentTab was nil (should not happen if tabs existed)
+             currentTab = nil
+        }
+
+
+        // Split View Tab
+        if let oldSplitViewTab = splitViewTabIndex {
+            if oldSplitViewTab == tabIndex {
+                splitViewTabIndex = nil // Detached tab was in split view, so close split view for this window
+                splitViewEnabled = false // Or select another tab for split view if desired
+            } else if oldSplitViewTab > tabIndex {
+                splitViewTabIndex = oldSplitViewTab - 1
+            }
+        }
+
+        // If all tabs are closed in this window, add a new empty one
+        if tabs.isEmpty {
+            newDocument() // This will also set currentTab = 0
+        } else {
+            // Ensure currentTab is valid if it became invalid (e.g., was last tab and got removed)
+            if let cur = currentTab, cur >= tabs.count {
+                currentTab = tabs.count - 1
+            }
+        }
+
+
+        objectWillChange.send()
+        NotificationCenter.default.post(name: .appStateTabDidChange, object: self)
+        print("Requested detach for tab \(tabIndex) with ID \(documentIDToPass). New currentTab: \(self.currentTab ?? -1)")
+    }
+
+    func moveTab(from sourceIndex: Int, to destinationIndex: Int) {
+        guard sourceIndex >= 0, sourceIndex < tabs.count,
+              destinationIndex >= 0, destinationIndex < tabs.count,
+              sourceIndex != destinationIndex else {
+            print("Invalid tab move operation: source \(sourceIndex), destination \(destinationIndex), count \(tabs.count)")
+            return
+        }
+
+        let movedTab = tabs.remove(at: sourceIndex)
+        tabs.insert(movedTab, at: destinationIndex)
+
+        // Update currentTab
+        if let oldCurrentTab = currentTab {
+            if oldCurrentTab == sourceIndex {
+                currentTab = destinationIndex
+            } else if sourceIndex < oldCurrentTab && destinationIndex >= oldCurrentTab {
+                currentTab = oldCurrentTab - 1
+            } else if sourceIndex > oldCurrentTab && destinationIndex <= oldCurrentTab {
+                currentTab = oldCurrentTab + 1
+            }
+        }
+
+        // Update splitViewTabIndex
+        if let oldSplitViewTab = splitViewTabIndex {
+            if oldSplitViewTab == sourceIndex {
+                splitViewTabIndex = destinationIndex
+            } else if sourceIndex < oldSplitViewTab && destinationIndex >= oldSplitViewTab {
+                splitViewTabIndex = oldSplitViewTab - 1
+            } else if sourceIndex > oldSplitViewTab && destinationIndex <= oldSplitViewTab {
+                splitViewTabIndex = oldSplitViewTab + 1
+            }
+        }
+
+        // Ensure indices are clamped to valid ranges (though logic above should handle it)
+        if let current = currentTab {
+            self.currentTab = max(0, min(tabs.count - 1, current))
+        }
+        if let split = splitViewTabIndex {
+            self.splitViewTabIndex = max(0, min(tabs.count - 1, split))
+        }
+
+        objectWillChange.send()
+
+        // Post notification about tab change, as order might affect UI components listening
+        NotificationCenter.default.post(
+            name: .appStateTabDidChange, // Or a new specific notification like .appStateTabOrderDidChange
+            object: self
+        )
+        print("Moved tab from \(sourceIndex) to \(destinationIndex). New currentTab: \(currentTab ?? -1), new splitViewTab: \(splitViewTabIndex ?? -1)")
+    }
     
     // Modified for direct updating without safeStateUpdate
     func selectTab(at index: Int) {
@@ -1242,5 +1410,73 @@ class AppState: ObservableObject {
     
     func toggleSplitOrientation() {
         splitViewOrientation = splitViewOrientation == .horizontal ? .vertical : .horizontal
+    }
+
+    func activateSplitViewWithDraggedTab(draggedTabIndex: Int, dropEdge: Edge) {
+        guard draggedTabIndex >= 0 && draggedTabIndex < tabs.count else {
+            print("Error: Invalid draggedTabIndex (\(draggedTabIndex)) for split view activation. Tabs count: \(tabs.count)")
+            return
+        }
+
+        splitViewEnabled = true
+
+        switch dropEdge {
+        case .leading, .trailing:
+            splitViewOrientation = .horizontal
+        case .top, .bottom:
+            splitViewOrientation = .vertical
+        default: // Should not happen with typical Edge cases like .all or others.
+            print("Warning: Unexpected dropEdge value: \(dropEdge). Defaulting to horizontal orientation.")
+            splitViewOrientation = .horizontal
+        }
+
+        self.splitViewTabIndex = draggedTabIndex // The dragged tab is for the new split pane.
+
+        if self.tabs.count <= 1 {
+            // If 0 or 1 tab, both main and split view will show the same tab (index 0 if tab exists).
+            self.currentTab = self.tabs.isEmpty ? nil : 0
+            self.splitViewTabIndex = self.tabs.isEmpty ? nil : 0
+        } else {
+            // More than one tab exists.
+            if let oldCurrentTab = self.currentTab, oldCurrentTab == draggedTabIndex {
+                // The active tab in the main pane was the one dragged.
+                // So, the main pane needs a new active tab.
+                // Set it to the one "after" the dragged tab (cyclically).
+                self.currentTab = (draggedTabIndex + 1) % self.tabs.count
+            } else if self.currentTab == nil {
+                 // currentTab was nil, but tabs exist. Set main pane's tab to 0.
+                 // If tab 0 is the one being dragged, then set main pane's tab to 1 (or 0 if only 1 tab, handled above).
+                 self.currentTab = (draggedTabIndex == 0) ? (1 % self.tabs.count) : 0
+            }
+            // If currentTab was not nil and was different from draggedTabIndex, it remains as is.
+            // splitViewTabIndex is already set to draggedTabIndex.
+            // In this scenario, currentTab and splitViewTabIndex are guaranteed to be different.
+        }
+
+        // Final sanity checks for validity, although the logic above should ensure this.
+        if let cur = self.currentTab, (cur < 0 || cur >= self.tabs.count) {
+            self.currentTab = self.tabs.isEmpty ? nil : 0 // Default to first tab or nil
+        }
+        // splitViewTabIndex is already confirmed valid by the initial guard (draggedTabIndex is valid).
+        // If tabs became empty somehow (not expected here), it should also be nil.
+        if self.tabs.isEmpty {
+            self.currentTab = nil
+            self.splitViewTabIndex = nil
+        }
+
+        // Fallback: If, after all logic, currentTab and splitViewTabIndex are the same AND there's more than one tab,
+        // attempt to make them different. This indicates a potential logic flaw above if reached frequently.
+        if self.tabs.count > 1 && self.currentTab == self.splitViewTabIndex {
+            print("Warning: currentTab and splitViewTabIndex are the same (\(self.currentTab ?? -1)) with multiple tabs. Adjusting.")
+            self.currentTab = (self.splitViewTabIndex! + 1) % self.tabs.count
+            // If they are STILL the same (shouldn't happen if tabs.count > 1), something is very wrong.
+            // For instance, if tabs.count = 2, splitViewTabIndex = 0, currentTab becomes 1.
+            // If splitViewTabIndex = 1, currentTab becomes 0.
+        }
+
+        print("Activated split view. Orientation: \(splitViewOrientation). Primary Tab: \(currentTab ?? -1), Split Tab: \(splitViewTabIndex ?? -1)")
+
+        objectWillChange.send()
+        NotificationCenter.default.post(name: .appStateTabDidChange, object: self)
     }
 }

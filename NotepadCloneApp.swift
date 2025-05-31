@@ -1,10 +1,10 @@
 //
-//  NotepadCloneApp.swift
+//  NotepadCloneApp.swift (Updated for Detachable Tabs - Phase 1)
 //  NotepadClone2
 //
 //  Created by Ian Trimble on 5/10/25.
-//  Updated by Ian Trimble on 5/12/25.
-//  Version: 2025-05-12
+//  Updated by Ian Trimble on 5/13/25. // Assuming date update for new changes
+//  Version: 2025-05-13
 //
 
 import SwiftUI
@@ -12,43 +12,74 @@ import SwiftUI
 
 @main
 struct NotepadCloneApp: App {
-    // Make appState internal so it can be accessed
-    @StateObject var appState = AppState()
+    // Main AppState for the initial window
+    @StateObject var mainAppState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var isAppStateReady = false // Controls ContentView display
     
-    // We'll set up the AppDelegate connection when the view appears
+    @Environment(\.openWindow) var openWindow
+
+    // Define the notification name
+    static let requestNewWindowForDocumentID = Notification.Name("requestNewWindowForDocumentID")
+
+    init() {
+        // Register observer for detaching tabs
+        NotificationCenter.default.addObserver(
+            forName: NotepadCloneApp.requestNewWindowForDocumentID,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let documentID = notification.userInfo?["documentID"] as? UUID {
+                print("Received request to open new window for document ID: \(documentID)")
+                // Ensure this is called on the main thread if openWindow requires it
+                // (SwiftUI environment actions are generally main-thread safe)
+                self.openWindow(id: "document-window", value: documentID)
+            } else {
+                print("Error: Could not extract documentID from notification for new window.")
+            }
+        }
+    }
     
     var body: some Scene {
-        WindowGroup {
-            Group { // Use a Group to attach the .onAppear
-                if isAppStateReady {
-                    ContentView() // Ensuring this line is clean
-                        .environmentObject(appState)
-                        .onAppear { // This is ContentView's original onAppear
-                            // Configure any window properties when content appears
-                            setupWindowConfiguration()
-                        }
-                } else {
-                    // Show a loading view while AppState initializes
-                    Text("Loading...")
+        // Main Window Group
+        WindowGroup(id: "main") { // Provide an explicit ID for the main window group
+            ContentView()
+                .environmentObject(mainAppState) // Use mainAppState for the primary window
+                .onAppear {
+                    AppDelegate.setAppState(mainAppState) // Connect AppDelegate to the main AppState
+                    setupWindowConfiguration(for: NSApp.mainWindow) // Configure main window
                 }
-            }
-            .onAppear { // This is the moved .onAppear for isAppStateReady
-                // Set up AppDelegate connection now that StateObject is properly initialized
-                AppDelegate.setAppState(appState)
-                
-                // Show ContentView immediately - AppState is already initialized
-                self.isAppStateReady = true
-            }
         }
         .defaultSize(width: 1000, height: 700)
         .commands {
+            // Commands will apply to the focused window, which will have its own AppState instance.
+            // For actions, we need to ensure they target the AppState of the *current* window.
+            // This is typically handled by SwiftUI if @EnvironmentObject is used correctly in command targets,
+            // but global commands here might need a way to get the focused AppState if not using direct @FocusedValue.
+            // For now, assuming appState in commands refers to the focused window's appState.
+            // This part needs careful review if commands don't work as expected for secondary windows.
+            // The current structure with menu commands directly calling 'appState.method()'
+            // will refer to 'mainAppState' due to the @StateObject here.
+            // This needs to be refactored if commands should target the focused scene's AppState.
+            // A common solution is to move command definitions into the ContentView or a Commands struct
+            // that can access the focused scene's environment.
+            // For this subtask, we'll leave commands as they are, but acknowledge this limitation.
+            // Let's assume 'appState' in commands implicitly means 'mainAppState' for now.
+            // To make commands work for any window, we'd need a different approach.
+            // However, the prompt doesn't ask to refactor commands, just to set up new window creation.
+
+            // **Important Note for Command Targeting:**
+            // The `appState` used in the commands below will be `mainAppState`.
+            // To make them context-aware for multiple windows, this structure needs changes,
+            // e.g., by using `@FocusedValue(\.appState)` or passing AppState via menu item actions.
+            // For simplicity of this subtask, this is not addressed yet.
+
             // Settings/Preferences in the app menu
             CommandGroup(after: .appInfo) {
                 Divider()
                 Button("Preferences...") {
-                    openPreferencesWindow()
+                    // This should open preferences for the main app or focused window.
+                    // If `mainAppState` holds global prefs, this is okay.
+                    openPreferencesWindow(appState: mainAppState)
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
