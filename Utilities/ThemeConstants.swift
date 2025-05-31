@@ -365,6 +365,54 @@ enum AppTheme: String, CaseIterable, Identifiable {
     func save() {
         UserDefaults.standard.set(self.rawValue, forKey: "AppTheme")
     }
+
+    // MARK: - Terminal Colors
+
+    func terminalBackgroundColor() -> NSColor {
+        switch self {
+        case .system: return NSColor.textBackgroundColor // Standard system terminal background
+        case .light: return NSColor.white
+        case .dark: return NSColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0) // Slightly darker than editor
+        case .notepadPlusPlus: return self.editorBackgroundColor() // Or a specific terminal color
+        case .materialDark: return NSColor(hex: "#212121") // Darker than editor
+        case .nord: return NSColor(hex: "#20242F") // Darker than editor
+        case .aqua: return NSColor.windowBackgroundColor
+        case .turboPascal: return NSColor(hex: "#0000A0") // Consistent with editor
+        case .macOS8: return NSColor(hex: "#CCCCCC") // Consistent with editor
+        }
+    }
+
+    func terminalTextColor() -> NSColor {
+        switch self {
+        case .system: return NSColor.textColor
+        case .light: return NSColor.black
+        case .dark: return NSColor.lightGray // Slightly less bright than pure white for terminals
+        case .notepadPlusPlus: return self.editorTextColor()
+        case .materialDark: return NSColor(hex: "#B0BEC5")
+        case .nord: return NSColor(hex: "#D8DEE9")
+        case .aqua: return NSColor.textColor
+        case .turboPascal: return NSColor(hex: "#FFFF00") // Consistent
+        case .macOS8: return NSColor.black // Consistent
+        }
+    }
+
+    func terminalCursorColor() -> NSColor {
+        // Often good to be a distinct, visible color
+        switch self {
+        case .dark, .materialDark, .nord: return NSColor.yellow
+        default: return NSColor.systemOrange // Or self.terminalTextColor() for less contrast
+        }
+    }
+
+    func terminalSelectionColor() -> NSColor {
+        // Usually a semi-transparent version of the accent color or a standard selection color
+        switch self {
+        case .dark, .materialDark, .nord:
+            return NSColor.selectedTextBackgroundColor.withAlphaComponent(0.5)
+        default:
+            return NSColor.selectedTextBackgroundColor.withAlphaComponent(0.3)
+        }
+    }
 }
 
 // Extension to support hex color codes

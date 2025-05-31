@@ -35,6 +35,9 @@ extension Notification.Name {
     // Code folding notifications
     static let toggleCodeFold = Notification.Name("ToggleCodeFold")
     static let codeFoldStateDidChange = Notification.Name("CodeFoldStateDidChange")
+
+    // Terminal notifications
+    static let sendTextToTerminal = Notification.Name("sendTextToTerminalNotification")
     
     // Helper for posting typed notifications
     static func post(name: Notification.Name, object: Any? = nil, userInfo: [String: Any]? = nil) {

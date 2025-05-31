@@ -74,4 +74,23 @@ class TerminalManager: ObservableObject {
         terminal.currentDirectory = path
         runCommand("cd \"\(path)\"", in: terminal)
     }
+
+    public func sendTextToActiveTerminal(text: String) {
+        guard let activeId = activeTerminalId else {
+            print("TerminalManager: No active terminal to send text to.")
+            return
+        }
+        // Ensure the active terminal actually exists
+        guard terminals.contains(where: { $0.id == activeId }) else {
+            print("TerminalManager: Active terminal ID \(activeId) does not exist in the list of terminals.")
+            return
+        }
+
+        print("TerminalManager: Posting notification to send text to terminal ID \(activeId)")
+        NotificationCenter.default.post(
+            name: .sendTextToTerminal,
+            object: self,
+            userInfo: ["terminalId": activeId, "text": text]
+        )
+    }
 }

@@ -2,7 +2,15 @@ import SwiftUI
 
 struct TerminalPanelView: View {
     @ObservedObject var terminalManager: TerminalManager
-    @State private var config = TerminalConfig()
+    @EnvironmentObject var appState: AppState // Add AppState
+    @State private var config: TerminalConfig // Config will be updated based on theme
+
+    init(terminalManager: TerminalManager) {
+        self.terminalManager = terminalManager
+        // Initialize config with a temporary default.
+        // It will be properly set by .onAppear and .onReceive.
+        self._config = State(initialValue: TerminalConfig())
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -60,6 +68,14 @@ struct TerminalPanelView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(NSColor.controlBackgroundColor))
             }
+        }
+        .onAppear {
+            // Set initial config based on current theme
+            self.config = TerminalConfig(theme: appState.appTheme)
+        }
+        .onReceive(appState.$appTheme.receive(on: RunLoop.main)) { newTheme in
+            // Update config when theme changes
+            self.config = TerminalConfig(theme: newTheme)
         }
     }
 }
