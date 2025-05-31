@@ -168,6 +168,13 @@ struct ContentView: View {
             if appState.showStatusBar {
                 statusBarView() // Further extraction for clarity
             }
+
+            // Detach Drop Zone - always present at the bottom of mainContentView's VStack
+            // It will become more prominent via its own @State isTargeted when a tab is dragged over it.
+            DetachDropZoneView()
+                .environmentObject(appState)
+                // The DetachDropZoneView itself defines its height and appearance.
+                // No need for an AppState.isDraggingTabForDetach check due to revised approach.
         }
     }
 
