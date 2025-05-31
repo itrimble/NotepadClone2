@@ -216,6 +216,11 @@ Example prompt:
   - [x] Clickable navigation (gesture posts notification, editor responds)
   - [x] Theme-aware rendering (basic theming for background and indicator)
 
+### Enhanced File Explorer ✅ COMPLETED (2024-08-01)
+- [x] Drag and drop support (for moving items within the explorer view)
+- [x] Remember collapsed state (folder expansion state persists via UserDefaults)
+- [x] File watching for external changes (using `FileSystemWatcher` for automatic refresh)
+
 ### Phase 4: Advanced Editing Features
 - [ ] Column Mode & Advanced Editing
   - [ ] Implement column/vertical selection mode
@@ -465,9 +470,13 @@ feat: Add split pane view with horizontal/vertical options
    - Find in Files UI files
    - Code folding UI files
    - DocumentMapView.swift (Newly added)
-2. **Enhanced File Explorer**
-   - Drag and drop support
-   - Remember collapsed state
-   - File watching for external changes
+   - FileSystemWatcher.swift (Newly added)
+2. **Column Mode & Advanced Editing**
+   - Implement column/vertical selection mode
+   - Multi-cursor editing support
+   - Rectangular text operations
+   - Column mode indicators
+   - Alt+drag for column selection
+   - Column copy/paste operations
 
 Remember: Claude Code works best with clear, specific instructions and a systematic approach. Use this plan as your guide for efficient, high-quality development.

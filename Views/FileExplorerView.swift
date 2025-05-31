@@ -1,6 +1,7 @@
 import SwiftUI
 import Foundation
 import AppKit
+import UniformTypeIdentifiers // Added import
 
 // MARK: - File System Models
 
@@ -13,6 +14,7 @@ class FileSystemItem: ObservableObject, Identifiable, Equatable {
     @Published var isExpanded: Bool = false
     @Published var children: [FileSystemItem] = []
     @Published var isLoaded: Bool = false
+    weak var manager: FileExplorerManager? // Added manager reference
     
     var isHidden: Bool {
         name.hasPrefix(".")
@@ -43,16 +45,33 @@ class FileSystemItem: ObservableObject, Identifiable, Equatable {
         }
     }
     
-    init(url: URL) {
+    init(url: URL, manager: FileExplorerManager) { // Modified signature
         self.url = url
         self.name = url.lastPathComponent
-        
+        self.manager = manager // Store the manager
+
         var isDir: ObjCBool = false
         self.isDirectory = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
+
+        if self.isDirectory { // Only directories can be expanded
+            if let mgr = self.manager, mgr.expandedItems.contains(self.url.path) {
+                self.isExpanded = true
+                // Automatically load children if persisted as expanded.
+                self.loadChildren()
+            } else {
+                self.isExpanded = false
+            }
+        } else {
+            self.isExpanded = false
+        }
     }
     
     func loadChildren() {
         guard isDirectory && !isLoaded else { return }
+        guard let manager = self.manager else {
+            print("Error: FileSystemItem's manager is nil. Cannot load children.")
+            return
+        }
         
         do {
             let contents = try FileManager.default.contentsOfDirectory(
@@ -63,7 +82,7 @@ class FileSystemItem: ObservableObject, Identifiable, Equatable {
             
             children = contents
                 .filter { !$0.lastPathComponent.hasPrefix(".") } // Filter hidden files
-                .map { FileSystemItem(url: $0) }
+                .map { FileSystemItem(url: $0, manager: manager) } // Pass manager
                 .sorted { item1, item2 in
                     // Directories first, then files, both alphabetically
                     if item1.isDirectory != item2.isDirectory {
@@ -91,15 +110,68 @@ class FileExplorerManager: ObservableObject {
     @Published var rootItem: FileSystemItem?
     @Published var selectedItem: FileSystemItem?
     @Published var isVisible: Bool = true
-    @Published var expandedItems: Set<String> = []
+    @Published var expandedItems: Set<String> = [] // Already existed, will be populated from UserDefaults
+    private var fileSystemWatcher: FileSystemWatcher? // Property for the watcher
     
+    private static let expandedItemsKey = "fileExplorerExpandedItemsKey" // UserDefaults key
+
+    init() {
+        if let savedPaths = UserDefaults.standard.array(forKey: Self.expandedItemsKey) as? [String] {
+            self.expandedItems = Set(savedPaths)
+            print("FileExplorerManager: Loaded \(self.expandedItems.count) expanded items from UserDefaults.")
+        } else {
+            self.expandedItems = [] // Ensure it's initialized
+            print("FileExplorerManager: No saved expanded items found or error in loading.")
+        }
+        // Other properties are initialized with default values or implicitly.
+    }
+
+    private func saveExpandedItems() {
+        UserDefaults.standard.set(Array(self.expandedItems), forKey: Self.expandedItemsKey)
+        print("FileExplorerManager: Saved \(self.expandedItems.count) expanded items to UserDefaults.")
+    }
+
     /// Sets the root directory for the file explorer
     func setRootDirectory(_ url: URL) {
-        rootItem = FileSystemItem(url: url)
-        rootItem?.loadChildren()
-        rootItem?.isExpanded = true
+        // Stop previous watcher
+        stopWatching()
+
+        rootItem = FileSystemItem(url: url, manager: self) // Pass manager
+        // The FileSystemItem's init now handles setting isExpanded based on persisted state
+        // and calls loadChildren if it was persisted as expanded.
+        if let root = rootItem, !root.isExpanded {
+            // Optional: Load first level children if root is not expanded by default
+            // root.loadChildren()
+        }
+        print("FileExplorerManager: Set root directory to \(url). Root item expanded: \(rootItem?.isExpanded ?? false)")
+
+        // Start new watcher for the new root directory
+        self.fileSystemWatcher = FileSystemWatcher(url: url) { [weak self] in
+            print("[FileExplorerManager] Watcher event triggered for URL: \(url.path)")
+            self?.handleFileSystemChange()
+        }
+
+        if self.fileSystemWatcher?.start() == true {
+            print("[FileExplorerManager] Started watching new root directory: \(url.path)")
+        } else {
+            print("[FileExplorerManager] Failed to start watching new root directory: \(url.path)")
+            self.fileSystemWatcher = nil // Clear if failed to start
+        }
     }
     
+    private func stopWatching() {
+        fileSystemWatcher?.stop()
+        fileSystemWatcher = nil
+        print("[FileExplorerManager] Stopped watching for file system changes.")
+    }
+
+    private func handleFileSystemChange() {
+        print("[FileExplorerManager] File system change detected via watcher. Refreshing entire explorer tree.")
+        // Ensure refresh is dispatched to the main queue as it likely involves UI updates.
+        // FileSystemWatcher already calls its handler on main, so direct call is fine.
+        self.refresh()
+    }
+
     /// Toggles the expansion state of a directory
     func toggleExpansion(for item: FileSystemItem) {
         guard item.isDirectory else { return }
@@ -115,6 +187,7 @@ class FileExplorerManager: ObservableObject {
         } else {
             expandedItems.remove(item.url.path)
         }
+        saveExpandedItems() // Save after modification
     }
     
     /// Selects a file or directory
@@ -137,6 +210,107 @@ class FileExplorerManager: ObservableObject {
             for child in item.children where child.isExpanded {
                 refreshItem(child)
             }
+        }
+    }
+
+    // Helper to find a FileSystemItem for a given URL within a subtree
+    // Used to refresh the correct parent after a move operation.
+    private func findItem(forURL url: URL, in item: FileSystemItem) -> FileSystemItem? {
+        if item.url == url {
+            return item
+        }
+        if item.isDirectory {
+            for child in item.children {
+                // Check if the child is the item itself or if the item is within the child's subtree
+                if child.url == url {
+                    return child
+                }
+                if url.path.hasPrefix(child.url.path + "/") { // Item is deeper in this child's hierarchy
+                    if let found = findItem(forURL: url, in: child) {
+                        return found
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    public func handleDrop(sourceURL: URL, destinationDirectoryItem: FileSystemItem) {
+        print("[FileExplorerManager] Handling drop of \(sourceURL.lastPathComponent) onto \(destinationDirectoryItem.name)")
+
+        // 1. Validations
+        guard destinationDirectoryItem.isDirectory else {
+            print("[FileExplorerManager] Error: Drop destination '\(destinationDirectoryItem.name)' is not a directory.")
+            return
+        }
+
+        guard sourceURL != destinationDirectoryItem.url else {
+            print("[FileExplorerManager] Error: Cannot move an item into itself.")
+            return
+        }
+
+        // Prevent dragging a parent into its child
+        if destinationDirectoryItem.url.path.hasPrefix(sourceURL.path + "/") {
+            print("[FileExplorerManager] Error: Cannot move a parent folder into its child.")
+            // Consider showing an alert to the user
+            return
+        }
+
+        let newFileName = sourceURL.lastPathComponent
+        let finalDestinationURL = destinationDirectoryItem.url.appendingPathComponent(newFileName)
+
+        // Check if source is already in the destination (no actual move needed if paths are equivalent)
+        // This check needs to be careful if sourceURL is a directory itself.
+        if sourceURL.deletingLastPathComponent().standardizedFileURL == destinationDirectoryItem.url.standardizedFileURL {
+             if sourceURL.standardizedFileURL == finalDestinationURL.standardizedFileURL {
+                print("[FileExplorerManager] Item '\(newFileName)' is already in directory '\(destinationDirectoryItem.name)' with the same name. No move needed.")
+                return
+            }
+        }
+
+        // Check if an item with the same name already exists at the destination
+        if FileManager.default.fileExists(atPath: finalDestinationURL.path) {
+            print("[FileExplorerManager] Error: An item named '\(newFileName)' already exists in '\(destinationDirectoryItem.name)'.")
+            // TODO: Implement overwrite confirmation or renaming strategy
+            // For now, we just abort the move.
+            // Consider showing an alert to the user.
+            return
+        }
+
+        // 2. Perform Move
+        do {
+            print("[FileExplorerManager] Attempting to move \(sourceURL.path) to \(finalDestinationURL.path)")
+            try FileManager.default.moveItem(at: sourceURL, to: finalDestinationURL)
+            print("[FileExplorerManager] Move successful.")
+
+            // 3. Refresh UI
+            // Find the original parent of the source item to refresh it
+            let oldParentURL = sourceURL.deletingLastPathComponent()
+            if let root = self.rootItem, let oldParentNode = findItem(forURL: oldParentURL, in: root) {
+                print("[FileExplorerManager] Refreshing old parent: \(oldParentNode.name)")
+                oldParentNode.isLoaded = false
+                oldParentNode.loadChildren()
+            } else {
+                print("[FileExplorerManager] Could not find old parent node for \(sourceURL.path). Refreshing root as fallback.")
+                self.refresh()
+            }
+
+            print("[FileExplorerManager] Refreshing destination directory: \(destinationDirectoryItem.name)")
+            destinationDirectoryItem.isLoaded = false
+            destinationDirectoryItem.loadChildren()
+            // Ensure the destination directory is marked as expanded if it wasn't already,
+            // so the newly moved item is visible.
+            if !destinationDirectoryItem.isExpanded {
+                 destinationDirectoryItem.isExpanded = true
+                 // Persist this change if needed by your expandedItems logic
+                 self.expandedItems.insert(destinationDirectoryItem.url.path)
+                 self.saveExpandedItems()
+            }
+
+
+        } catch {
+            print("[FileExplorerManager] Error moving item '\(sourceURL.lastPathComponent)' to '\(destinationDirectoryItem.name)': \(error.localizedDescription)")
+            // TODO: Show error alert to the user
         }
     }
 }
@@ -494,6 +668,7 @@ struct FileTreeItemView: View {
     let appState: AppState
     let onItemSelected: (FileSystemItem) -> Void
     let onContextMenu: (FileSystemItem) -> Void
+    @State private var isDropTargeted: Bool = false // For drop target visual feedback
     
     private var indentationWidth: CGFloat {
         CGFloat(level * 16)
@@ -546,9 +721,15 @@ struct FileTreeItemView: View {
             }
             .contentShape(Rectangle())
             .background(
-                Rectangle()
-                    .fill(isSelected ? Color(appState.appTheme.tabBarSelectedColor()) : Color.clear)
-                    .opacity(isSelected ? 0.3 : 0)
+                Group { // Use Group to conditionally apply background layers
+                    if isDropTargeted && item.isDirectory {
+                        Color.blue.opacity(0.25) // Visual feedback for drop target
+                    } else if isSelected {
+                        Color(appState.appTheme.tabBarSelectedColor()).opacity(0.3)
+                    } else {
+                        Color.clear
+                    }
+                }
             )
             .onTapGesture {
                 onItemSelected(item)
@@ -578,6 +759,41 @@ struct FileTreeItemView: View {
                     )
                 }
             }
+        }
+        .onDrag {
+            print("[FileTreeItemView] Dragging item: \(item.name) at URL: \(item.url.path)")
+            let itemProvider = NSItemProvider(object: item.url as NSURL)
+            return itemProvider
+        }
+        .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers in
+            guard self.item.isDirectory else {
+                print("[FileTreeItemView] Drop target '\(self.item.name)' is not a directory. Ignoring drop.")
+                return false // Cannot handle drop if not a directory
+            }
+
+            guard let provider = providers.first(where: { $0.canLoadObject(ofClass: URL.self) }) else {
+                print("[FileTreeItemView] No provider found that can load URL.")
+                return false
+            }
+
+            print("[FileTreeItemView] Item provider received for drop on '\(self.item.name)'. Attempting to load URL.")
+            _ = provider.loadObject(ofClass: URL.self) { url, error in
+                DispatchQueue.main.async { // Ensure UI updates and file operations are on main thread
+                    guard let sourceURL = url else {
+                        if let error = error {
+                            print("[FileTreeItemView] Error loading dropped item: \(error.localizedDescription)")
+                        } else {
+                            print("[FileTreeItemView] Failed to get URL from dropped item, but no error reported.")
+                        }
+                        return
+                    }
+
+                    print("[FileTreeItemView] Item with URL \(sourceURL.path) dropped onto directory \(self.item.name) (\(self.item.url.path))")
+                    // Pass to FileExplorerManager to handle the actual move and UI refresh
+                    self.fileManager.handleDrop(sourceURL: sourceURL, destinationDirectoryItem: self.item)
+                }
+            }
+            return true // Indicate that we can attempt to handle this drop type
         }
     }
     

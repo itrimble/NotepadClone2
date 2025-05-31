@@ -55,7 +55,7 @@
 * `DocumentMapView.swift`: Displays a clickable miniature overview of the document content, indicating the visible portion of the editor for quick navigation.
 * `PreferencesWindow.swift`: Settings interface for the application.
 * `SplitEditorView.swift`: Split pane editor view for side-by-side document editing.
-* `FileExplorerView.swift`: File explorer sidebar with tree view, file operations (create, rename, delete), and context menus.
+* `FileExplorerView.swift`: File explorer sidebar with tree view and context menus. Manages file operations (create, rename, delete), persists folder expansion states using `UserDefaults`, monitors for external file system changes via `FileSystemWatcher` for automatic refresh, and handles internal drag-and-drop operations for moving items.
 * `MarkdownPreviewView.swift`: WebKit-based markdown preview using the `Markdown` package for rendering, with theme-aware styling.
 * `MarkdownSplitView.swift`: Split view combining editor and preview with synchronized scrolling and export options, using the `Markdown` package for HTML generation.
 * `TerminalView.swift`: View for terminal emulation, handling input/output to the shell process.
@@ -66,6 +66,7 @@
 * `SyntaxHighlighter.swift`: Provides syntax highlighting for various programming languages.
 * `ThemeConstants.swift`: Defines the available themes (including new "Aqua", "Turbo Pascal", "Mac OS 8") and their visual properties.
 * `Notifications.swift`: Central place for all notification name declarations, including new code folding notifications and jump to line, `.minimapNavigateToRatio`, and `.customTextViewDidScroll`.
+* `FileSystemWatcher.swift`: Monitors file system events (creations, deletions, modifications, renames) for a given path using `DispatchSource` and triggers a callback.
 * `CodeFolder.swift`: Detects foldable code regions (functions, classes, blocks) for multiple programming languages.
 * `BracketMatcher.swift`: Provides intelligent bracket matching and highlighting functionality.
 * `SmartIndenter.swift`: Implements language-aware automatic indentation with configurable rules.
@@ -239,5 +240,10 @@ Based on Notepad++ design analysis and current progress, remaining features incl
   - Implemented visible area feedback: Editor scrolls update the minimap's visible area indicator.
   - Centralized `minimapNavigateToRatio` and added `customTextViewDidScroll` to `Utilities/Notifications.swift`.
   - Added unit tests (`DocumentMapViewTests.swift`, `CustomTextViewCoordinatorTests.swift`) for the new functionality.
+* **Enhanced File Explorer (2024-08-01):** Implemented several enhancements:
+  - Persistence for folder expansion states using `UserDefaults`.
+  - Real-time file watching for external changes via the new `FileSystemWatcher.swift` utility, triggering automatic UI refreshes.
+  - Drag and drop functionality within the file explorer to move files and folders.
+  - Added related unit and integration tests for these features.
 * Next phase: Document map/minimap implementation
 * See `prompt_plan.md` for detailed task tracking
