@@ -300,11 +300,111 @@ class ColumnarNSTextView: NSTextView {
         textStorage.endEditing()
         self.needsDisplay = true
     }
+
+    override func copy(_ sender: Any?) {
+        guard let coordinator = self.columnCoordinator,
+              !coordinator.currentColumnSelections.isEmpty,
+              let textStorage = self.textStorage else {
+            super.copy(sender) // Fallback to default copy behavior
+            return
+        }
+
+        var linesToCopy: [String] = []
+        for range in coordinator.currentColumnSelections { // Assumes currentColumnSelections is already sorted by location
+            if range.length > 0 {
+                 if range.location <= textStorage.length && NSMaxRange(range) <= textStorage.length {
+                    linesToCopy.append((textStorage.string as NSString).substring(with: range))
+                 } else {
+                    linesToCopy.append("") // Invalid range for this line
+                 }
+            } else {
+                // For a caret, copy an empty string for that line.
+                linesToCopy.append("")
+            }
+        }
+
+        let finalTextToCopy = linesToCopy.joined(separator: "\n")
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(finalTextToCopy, forType: .string)
+
+        print("TYPING_DEBUG: Column copy performed. Copied text: \"\(finalTextToCopy.replacingOccurrences(of: "\n", with: "\\n"))\"")
+        // Do not call super.copy(sender) as we have handled the copy operation.
+    }
+
+    override func paste(_ sender: Any?) {
+        guard let coordinator = self.columnCoordinator,
+              !coordinator.currentColumnSelections.isEmpty,
+              let textStorage = self.textStorage,
+              let pastedString = NSPasteboard.general.string(forType: .string) else {
+            super.paste(sender) // Fallback to default paste behavior
+            return
+        }
+
+        let linesToPaste = pastedString.components(separatedBy: .newlines)
+
+        textStorage.beginEditing()
+        var newCaretPositions: [NSRange] = []
+
+        let selectionsToProcess = coordinator.currentColumnSelections.sorted(by: { $0.location > $1.location })
+
+        for i in 0..<selectionsToProcess.count {
+            let rangeToReplace = selectionsToProcess[i]
+            let originalSelectionOrderIndex = coordinator.currentColumnSelections.count - 1 - i
+
+            var stringForThisCaret: String
+            if linesToPaste.count == 1 {
+                stringForThisCaret = linesToPaste.first ?? ""
+            } else {
+                stringForThisCaret = (originalSelectionOrderIndex < linesToPaste.count) ? linesToPaste[originalSelectionOrderIndex] : ""
+            }
+
+            let currentTextLength = textStorage.length
+            // Ensure location is valid before proceeding with replacement
+            guard rangeToReplace.location <= currentTextLength else {
+                 // If the original location is now beyond the text (due to shorter pastes on prior lines),
+                 // decide on a strategy: skip, or append at end.
+                 // For now, let's try to append at the current end of the text if it's truly out of bounds.
+                 // This might break column alignment but prevents crashes.
+                 // A more robust solution might involve complex tracking of line endings or padding.
+                 // However, the reverse iteration should largely prevent this unless lines are deleted entirely.
+                 // A simpler skip:
+                 // newCaretPositions.append(NSMakeRange(min(rangeToReplace.location, currentTextLength), 0)) // keep a caret at a safe spot
+                 // continue
+
+                 // For this iteration, let's use the provided logic which includes a safeguard:
+                 let safeLocation = min(rangeToReplace.location, currentTextLength)
+                 let safeLength = min(rangeToReplace.length, max(0, currentTextLength - safeLocation)) // max(0,...) ensures length isn't negative
+                 let safeRangeToReplace = NSMakeRange(safeLocation, safeLength)
+
+                 textStorage.replaceCharacters(in: safeRangeToReplace, with: stringForThisCaret)
+                 newCaretPositions.append(NSMakeRange(safeRangeToReplace.location + (stringForThisCaret as NSString).length, 0))
+                 continue
+            }
+
+            let validLength = min(rangeToReplace.length, currentTextLength - rangeToReplace.location)
+            let actualRangeToReplace = NSMakeRange(rangeToReplace.location, validLength)
+
+            textStorage.replaceCharacters(in: actualRangeToReplace, with: stringForThisCaret)
+
+            let newCaretLocation = actualRangeToReplace.location + (stringForThisCaret as NSString).length
+            newCaretPositions.append(NSMakeRange(newCaretLocation, 0))
+        }
+
+        coordinator.currentColumnSelections = newCaretPositions.sorted(by: { $0.location < $1.location })
+
+        textStorage.endEditing()
+        self.needsDisplay = true
+
+        print("TYPING_DEBUG: Column paste performed.")
+    }
 }
 
 struct CustomTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var attributedText: NSAttributedString
+    @EnvironmentObject var appState: AppState // Added to access AppState
     @Environment(\.colorScheme) var colorScheme
     let appTheme: AppTheme
     let showLineNumbers: Bool
@@ -530,11 +630,12 @@ struct CustomTextView: NSViewRepresentable {
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator(self, appState: self.appState) // Pass appState
     }
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CustomTextView
+        private let appState: AppState // Property to hold AppState
         weak var textView: NSTextView? // Added property to store textView
         private var isUpdating = false
         private var lastText = ""
@@ -545,12 +646,23 @@ struct CustomTextView: NSViewRepresentable {
         // New properties for Column Mode:
         var isOptionKeyDown: Bool = false
         var columnSelectionAnchorPoint: NSPoint? // Starting point of a column drag in view coordinates
-        var currentColumnSelections: [NSRange] = [] // Holds NSRange for each line in column selection
+        var currentColumnSelections: [NSRange] = [] { // Holds NSRange for each line in column selection
+            didSet {
+                let isActive = !currentColumnSelections.isEmpty
+                if appState.isColumnModeActive != isActive {
+                    DispatchQueue.main.async {
+                        self.appState.isColumnModeActive = isActive
+                        // print("TYPING_DEBUG: isColumnModeActive set to \(isActive)")
+                    }
+                }
+            }
+        }
         
-        init(_ parent: CustomTextView) {
+        init(_ parent: CustomTextView, appState: AppState) { // Add appState parameter
             self.parent = parent
+            self.appState = appState // Store appState
             super.init()
-            print("TYPING_DEBUG: 🔧 Coordinator.init - Created coordinator")
+            print("TYPING_DEBUG: 🔧 Coordinator.init - Created coordinator for document \(parent.document.id)")
             
             // Observe jump to line notifications
             NotificationCenter.default.addObserver(

@@ -268,6 +268,7 @@ struct ContentView: View {
                 columnNumber: currentDocument.columnNumber,
                 selectedRange: currentDocument.selectedRange,
                 encoding: currentDocument.encoding,
+                // currentProvider is removed, StatusBar will get it from appState via @EnvironmentObject
                 onLineColumnClick: { appState.showGoToLineDialog() },
                 onEncodingClick: { appState.showEncodingMenu() }
             )

@@ -1,36 +1,42 @@
 import XCTest
 @testable import NotepadClone2 // Ensure main app target is importable
 import AppKit
+import Combine // Added import
 
 class ColumnarNSTextViewTests: XCTestCase {
 
     var textView: ColumnarNSTextView!
     var coordinator: CustomTextView.Coordinator!
     var scrollView: NSScrollView!
+    var appState: AppState! // New property
+    var cancellables: Set<AnyCancellable> = [] // New property
 
     // Dummy parent CustomTextView for coordinator initialization
-    // These @State properties won't be properly managed by SwiftUI in a test context,
-    // but are needed for CustomTextView initialization.
     @State var dummyText: String = ""
     @State var dummyAttributedText: NSAttributedString = NSAttributedString(string: "")
 
     override func setUpWithError() throws {
         try super.setUpWithError()
+        appState = AppState() // Initialize AppState
 
-        // Initialize the coordinator's parent CustomTextView
-        // This requires @State properties, which are tricky in XCTest.
-        // We'll use placeholder state vars declared in the test class.
-        let parentView = CustomTextView(
+        // Dummy CustomTextView struct instance to pass to Coordinator
+        let dummyParentViewStruct = CustomTextView(
             text: $dummyText,
             attributedText: $dummyAttributedText,
-            appTheme: .defaultLight, // Or any theme
+            // appState is provided via @EnvironmentObject in real use,
+            // but makeCoordinator directly passes it to Coordinator.
+            // So we need to ensure our Coordinator gets it.
+            appTheme: .defaultLight,
             showLineNumbers: false,
             language: .plaintext,
-            document: Document(text: "") // Dummy document
+            document: Document(text: "")
         )
-        coordinator = parentView.makeCoordinator()
+        // Pass our test appState to the coordinator
+        // Note: CustomTextView's makeCoordinator uses its own @EnvironmentObject AppState.
+        // For testing the coordinator's interaction with AppState, we must ensure
+        // *this* coordinator instance under test has *our* test AppState instance.
+        coordinator = CustomTextView.Coordinator(dummyParentViewStruct, appState: self.appState)
 
-        // Initialize ColumnarNSTextView
         textView = ColumnarNSTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 500))
         textView.columnCoordinator = coordinator
         coordinator.textView = textView // Link back from coordinator
@@ -70,9 +76,16 @@ class ColumnarNSTextViewTests: XCTestCase {
         // let window = NSWindow()
         // window.contentView = scrollView
         // textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+
+        // Clear pasteboard before each test that might use it
+        NSPasteboard.general.clearContents()
     }
 
     override func tearDownWithError() throws {
+        NSPasteboard.general.clearContents()
+        cancellables.forEach { $0.cancel() } // Cancel Combine subscriptions
+        cancellables.removeAll()
+        appState = nil // Nil out appState
         textView = nil
         coordinator = nil
         scrollView = nil
@@ -265,5 +278,339 @@ class ColumnarNSTextViewTests: XCTestCase {
 
         textView.mouseDragged(with: createEvent(type: .leftMouseDragged, location: normalDragPointView, modifierFlags: []))
         XCTAssertTrue(coordinator.currentColumnSelections.isEmpty, "Column selections should remain empty during a normal drag.")
+    }
+
+    // MARK: - Multi-Cursor Input / Deletion Tests
+
+    func testMultiCursorTyping_SingleCharacterAtCarets() {
+        let initialText = "abc\ndef\nghi"
+        setupTextViewContent(initialText)
+
+        coordinator.currentColumnSelections = [
+            NSMakeRange(0, 0), // Before 'a'
+            NSMakeRange(4, 0), // Before 'd'
+            NSMakeRange(8, 0)  // Before 'g'
+        ]
+
+        let handledByDelegate = coordinator.textView(
+            textView,
+            shouldChangeTextIn: textView.selectedRange(),
+            replacementString: "X"
+        )
+
+        XCTAssertFalse(handledByDelegate, "Delegate should handle multi-cursor typing and return false.")
+
+        let expectedText = "Xabc\nXdef\nXghi"
+        XCTAssertEqual(textView.string, expectedText, "Text not updated correctly after multi-cursor typing.")
+
+        // Original carets: 0, 4, 8. Insert "X" (len 1) at each.
+        // New carets, after insertion and sorted:
+        // 1st X at 0 -> new caret at 1
+        // 2nd X at 4 -> new caret at 4+1=5
+        // 3rd X at 8 -> new caret at 8+1=9
+        let expectedSelections = [
+            NSMakeRange(1, 0),
+            NSMakeRange(5, 0),
+            NSMakeRange(9, 0)
+        ]
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections, "Caret positions not updated correctly.")
+    }
+
+    func testMultiCursorTyping_OverlappingSelections() {
+        let initialText = "SELECT ME\nAND ME TOO" // Line 1: "SELECT ME" (len 9), newline (len 1). Line 2 starts at 10.
+        setupTextViewContent(initialText)
+        coordinator.currentColumnSelections = [
+            NSMakeRange(0, 6), // "SELECT"
+            NSMakeRange(10, 3) // "AND"
+        ]
+
+        let replacement = "REPLACED"
+        let handled = coordinator.textView(textView, shouldChangeTextIn: NSMakeRange(0,0), replacementString: replacement)
+        XCTAssertFalse(handled)
+
+        let expectedText = "REPLACED ME\nREPLACED ME TOO"
+        XCTAssertEqual(textView.string, expectedText)
+
+        // Implementation iterates currentColumnSelections in reverse order of location.
+        // 1. Range (10,3) "AND" is replaced with "REPLACED" (len 8).
+        //    Text becomes: "SELECT ME\nREPLACED ME TOO"
+        //    New caret for this operation: location 10 + length of "REPLACED" = 10 + 8 = 18.
+        // 2. Range (0,6) "SELECT" is replaced with "REPLACED" (len 8).
+        //    Text becomes: "REPLACED ME\nREPLACED ME TOO" (original text for this op was "SELECT ME...")
+        //    New caret for this operation: location 0 + length of "REPLACED" = 0 + 8 = 8.
+        // Final selections are collected and sorted:
+        let expectedSelections = [
+            NSMakeRange(8, 0),
+            NSMakeRange(10 + replacement.utf16.count - 3 + (replacement.utf16.count - 6) , 0) //This calculation is tricky.
+                                                                                                // Let's use the simpler calculation based on final text structure.
+                                                                                                // First "REPLACED" ends at index 8.
+                                                                                                // Text " ME\n" is 4 chars.
+                                                                                                // Second "REPLACED" starts after "REPLACED ME\n", so at 8+4=12. Ends at 12+8=20.
+        ]
+         let expectedSelectionsCorrected = [
+            NSMakeRange( (replacement as NSString).length, 0), // Caret after first "REPLACED"
+            NSMakeRange( ("REPLACED ME\n" as NSString).length + (replacement as NSString).length, 0) // Caret after second "REPLACED"
+        ]
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelectionsCorrected, "Carets not updated correctly after multi-selection replace.")
+    }
+
+    // MARK: - Column Copy/Paste Tests
+
+    func testColumnCopy_SelectedTextAndCarets() {
+        let initialText = "L1: Hello\nL2: World\nL3: Test!"
+        setupTextViewContent(initialText)
+
+        // L1: "L1: Hello" (idx 0-8) -> "He" is (4,2)
+        // L2: "L2: World" (idx 9-17) -> Before 'W' is (13,0)
+        // L3: "L3: Test!" (idx 18-26) -> "Test" is (22,4)
+        coordinator.currentColumnSelections = [
+            NSMakeRange(4, 2),  // "He"
+            NSMakeRange(13, 0), // Caret before 'W'
+            NSMakeRange(22, 4) // "Test"
+        ].sorted(by: { $0.location < $1.location })
+
+        textView.copy(nil)
+
+        let expectedPasteboardContent = "He\n\nTest"
+        let actualPasteboardContent = NSPasteboard.general.string(forType: .string)
+        XCTAssertEqual(actualPasteboardContent, expectedPasteboardContent, "Pasteboard content not as expected for column copy.")
+    }
+
+    func testColumnPaste_SingleLineToMultipleCarets() {
+        let initialText = "aaa\nbbb\nccc"
+        setupTextViewContent(initialText)
+
+        coordinator.currentColumnSelections = [NSMakeRange(0,0), NSMakeRange(4,0), NSMakeRange(8,0)]
+
+        let textToPaste = "XYZ"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(textToPaste, forType: .string)
+
+        textView.paste(nil)
+
+        let expectedText = "XYZaaa\nXYZbbb\nXYZccc"
+        XCTAssertEqual(textView.string, expectedText, "Text not updated correctly after pasting single line to multiple carets.")
+
+        let lenXYZ = (textToPaste as NSString).length
+        let expectedSelections = [
+            NSMakeRange(lenXYZ, 0),
+            NSMakeRange(4 + lenXYZ, 0),
+            NSMakeRange(8 + lenXYZ, 0)
+        ]
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections, "Caret positions incorrect after single line paste.")
+    }
+
+    func testColumnPaste_MultipleLinesToMultipleCarets_EqualCount() {
+        let initialText = "111\n222\n333"
+        setupTextViewContent(initialText)
+        coordinator.currentColumnSelections = [NSMakeRange(0,0), NSMakeRange(4,0), NSMakeRange(8,0)]
+
+        let textToPaste = "AA\nBB\nCC"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(textToPaste, forType: .string)
+
+        textView.paste(nil)
+
+        let expectedText = "AA111\nBB222\nCC333"
+        XCTAssertEqual(textView.string, expectedText)
+
+        let expectedSelections = [NSMakeRange(2,0), NSMakeRange(6,0), NSMakeRange(10,0)]
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testColumnPaste_FewerLinesThanCarets() {
+        let initialText = "111\n222\n333"
+        setupTextViewContent(initialText)
+        coordinator.currentColumnSelections = [NSMakeRange(0,0), NSMakeRange(4,0), NSMakeRange(8,0)]
+
+        let textToPaste = "AA\nBB"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(textToPaste, forType: .string)
+
+        textView.paste(nil)
+
+        let expectedText = "AA111\nBB222\n333"
+        XCTAssertEqual(textView.string, expectedText)
+
+        let expectedSelections = [NSMakeRange(2,0), NSMakeRange(6,0), NSMakeRange(8,0)]
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testColumnPaste_MoreLinesThanCarets() {
+        let initialText = "111\n222"
+        setupTextViewContent(initialText)
+        coordinator.currentColumnSelections = [NSMakeRange(0,0), NSMakeRange(4,0)]
+
+        let textToPaste = "AA\nBB\nCC\nDD"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(textToPaste, forType: .string)
+
+        textView.paste(nil)
+
+        let expectedText = "AA111\nBB222"
+        XCTAssertEqual(textView.string, expectedText)
+
+        let expectedSelections = [NSMakeRange(2,0), NSMakeRange(6,0)]
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testColumnPaste_ReplacesExistingColumnSelection() {
+        let initialText = "abc:value1\ndef:value2\nghi:value3"
+        setupTextViewContent(initialText)
+
+        coordinator.currentColumnSelections = [NSMakeRange(4,6), NSMakeRange(14,6), NSMakeRange(24,6)]
+
+        let textToPaste = "NEW1\nNEW2\nNEW3"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(textToPaste, forType: .string)
+
+        textView.paste(nil)
+
+        let expectedText = "abc:NEW1\ndef:NEW2\nghi:NEW3"
+        XCTAssertEqual(textView.string, expectedText)
+
+        let expectedSelections = [NSMakeRange(8,0), NSMakeRange(18,0), NSMakeRange(28,0)]
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testMultiCursorDeleteBackward_FromCaretsAtLineStarts() {
+        // Text: "abc\ndef\nghi"
+        // Carets: (0,0) before 'a', (4,0) before 'd', (8,0) before 'g'
+        // \n is at index 3, 7
+        setupTextViewContent("abc\ndef\nghi")
+        coordinator.currentColumnSelections = [NSMakeRange(0,0), NSMakeRange(4,0), NSMakeRange(8,0)]
+
+        textView.deleteBackward(nil)
+
+        // Expected behavior:
+        // Caret at 8 (before 'g'): deletes newline at 7. Text: "abc\ndefghi". New caret: 7.
+        // Caret at 4 (before 'd'): deletes newline at 3. Text: "abcdefghi". New caret: 3.
+        // Caret at 0 (before 'a'): no change. New caret: 0.
+        // Sorted new carets: [ (0,0), (3,0), (7,0) ] -> No, (3,0) becomes (3,0), (7,0) becomes (7-1=6,0)
+        // Let's trace carefully based on reverse iteration:
+        // 1. Selection (8,0): Deletes char at 7 ('\n'). Text: "abc\ndefghi". New caret for this op: (7,0).
+        // 2. Selection (4,0): Deletes char at 3 ('\n'). Text: "abcdefghi". New caret for this op: (3,0).
+        // 3. Selection (0,0): No deletion. New caret for this op: (0,0).
+        // Final sorted selections:
+        let expectedSelections = [NSMakeRange(0,0), NSMakeRange(3,0), NSMakeRange(3 + "def".count, 0)] // 0, 3, 6
+        XCTAssertEqual(textView.string, "abcdefghi")
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testMultiCursorDeleteBackward_FromCarets_MidLine() {
+        setupTextViewContent("abc\ndef\nghi")
+        // Carets: after a (idx 1), after d (idx 5), after g (idx 9)
+        coordinator.currentColumnSelections = [NSMakeRange(1,0), NSMakeRange(5,0), NSMakeRange(9,0)]
+
+        textView.deleteBackward(nil)
+
+        // Expected: removes 'a', 'd', 'g'
+        // 1. Sel (9,0) deletes 'g'. Text: "abc\ndef\nhi". Caret for op: (8,0)
+        // 2. Sel (5,0) deletes 'd'. Text: "abc\nef\nhi". Caret for op: (4,0)
+        // 3. Sel (1,0) deletes 'a'. Text: "bc\nef\nhi". Caret for op: (0,0)
+        // Final sorted carets:
+        let expectedSelections = [NSMakeRange(0,0), NSMakeRange(3,0), NSMakeRange(6,0)]
+        XCTAssertEqual(textView.string, "bc\nef\nhi")
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testMultiCursorDeleteBackward_WithSelections() {
+        setupTextViewContent("DELETE ME\nAND ME TOO")
+        // Selections: "DELETE" (0,6), "AND" (10,3)
+        coordinator.currentColumnSelections = [NSMakeRange(0,6), NSMakeRange(10,3)]
+
+        textView.deleteBackward(nil)
+        // Expect: " ME\n ME TOO"
+        // 1. Sel (10,3) "AND" deleted. Text: "DELETE ME\n ME TOO". Caret for op: (10,0)
+        // 2. Sel (0,6) "DELETE" deleted. Text: " ME\n ME TOO". Caret for op: (0,0)
+        // Final sorted carets:
+        // First caret at 0.
+        // Second caret's original location 10 is now shifted by -6 (length of "DELETE"). So, 10-6 = 4.
+        let expectedSelections = [NSMakeRange(0,0), NSMakeRange( (" ME\n" as NSString).length ,0)]
+        XCTAssertEqual(textView.string, " ME\n ME TOO")
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testMultiCursorDeleteForward_FromCarets() {
+        setupTextViewContent("abc\ndef\nghi")
+        // Carets: before a (0,0), before d (4,0), before g (8,0)
+        coordinator.currentColumnSelections = [NSMakeRange(0,0), NSMakeRange(4,0), NSMakeRange(8,0)]
+
+        textView.deleteForward(nil)
+        // Expected: remove 'a', 'd', 'g'
+        // 1. Sel (8,0) deletes 'g'. Text: "abc\ndef\nhi". Caret for op: (8,0)
+        // 2. Sel (4,0) deletes 'd'. Text: "abc\nef\nhi". Caret for op: (4,0)
+        // 3. Sel (0,0) deletes 'a'. Text: "bc\nef\nhi". Caret for op: (0,0)
+        // Final sorted carets (locations remain same as text before them is removed):
+        // (0,0), (original 4, now 3 because 'a' is gone), (original 8, now 3+3=6 because 'a' and 'd' are gone)
+        let expectedSelections = [NSMakeRange(0,0), NSMakeRange(3,0), NSMakeRange(6,0)]
+        XCTAssertEqual(textView.string, "bc\nef\nhi")
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    func testMultiCursorDeleteForward_WithSelections() {
+        setupTextViewContent("DELETE ME\nAND ME TOO")
+        coordinator.currentColumnSelections = [NSMakeRange(0,6), NSMakeRange(10,3)] // "DELETE", "AND"
+
+        textView.deleteForward(nil)
+        // Expect: " ME\n ME TOO"
+        // 1. Sel (10,3) "AND" deleted. Text: "DELETE ME\n ME TOO". Caret for op: (10,0)
+        // 2. Sel (0,6) "DELETE" deleted. Text: " ME\n ME TOO". Caret for op: (0,0)
+        // Final sorted carets:
+        // First caret at 0.
+        // Second caret's original location 10 is now shifted by -6 (length of "DELETE"). So, 10-6 = 4.
+        let expectedSelections = [NSMakeRange(0,0), NSMakeRange( (" ME\n" as NSString).length ,0)]
+        XCTAssertEqual(textView.string, " ME\n ME TOO")
+        XCTAssertEqual(coordinator.currentColumnSelections, expectedSelections)
+    }
+
+    // MARK: - AppState Interaction Test
+
+    func testAppStateIsColumnModeActive_UpdatesWithColumnSelections() {
+        // Initial state check
+        XCTAssertFalse(appState.isColumnModeActive, "Initially, column mode should be inactive in AppState.")
+
+        var cancellables = Set<AnyCancellable>() // Store cancellable for Combine sink
+
+        // Expectation for isColumnModeActive to become true
+        let expectationTrue = XCTestExpectation(description: "AppState.isColumnModeActive should become true")
+
+        appState.$isColumnModeActive
+            .dropFirst() // Ignore initial value
+            .sink { newValue in
+                if newValue == true {
+                    expectationTrue.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Activate column selection by modifying coordinator's property
+        coordinator.currentColumnSelections = [NSMakeRange(0, 1)]
+        // The didSet on currentColumnSelections in Coordinator updates appState.isColumnModeActive (on main async)
+
+        wait(for: [expectationTrue], timeout: 2.0) // Wait for async update
+        XCTAssertTrue(appState.isColumnModeActive, "Column mode should be active in AppState after selections are added.")
+
+        cancellables.removeAll() // Clear previous cancellables
+
+        // Expectation for isColumnModeActive to become false
+        let expectationFalse = XCTestExpectation(description: "AppState.isColumnModeActive should become false")
+
+        appState.$isColumnModeActive
+            .dropFirst() // Ignore current value (which is true)
+            .sink { newValue in
+                if newValue == false {
+                    expectationFalse.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Deactivate column selection
+        coordinator.currentColumnSelections = []
+
+        wait(for: [expectationFalse], timeout: 2.0) // Wait for async update
+        XCTAssertFalse(appState.isColumnModeActive, "Column mode should be inactive in AppState after selections are cleared.")
+
+        cancellables.removeAll()
     }
 }
