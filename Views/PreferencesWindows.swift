@@ -2,6 +2,7 @@ import SwiftUI
 
 // Define PreferenceTabType here so it's available to AppState and PreferencesWindow
 enum PreferenceTabType: String, CaseIterable, Identifiable {
+    case about = "About"
     case syntax = "Syntax"
     case general = "General"
     case editor = "Editor"
@@ -18,6 +19,13 @@ struct PreferencesWindow: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
+            // About Tab
+            AboutPreferencesView()
+                .tabItem {
+                    Label("About", systemImage: "info.circle.fill")
+                }
+                .tag(PreferenceTabType.about)
+            
             // Syntax Highlighting Tab
             SyntaxPreferencesView()
                 .tabItem {
@@ -401,6 +409,171 @@ extension Color {
         }
         
         return Color(red: red, green: green, blue: blue, opacity: alpha)
+    }
+}
+
+struct AboutPreferencesView: View {
+    @State private var version = "3.1.1"
+    @State private var buildNumber = "2025.05.31"
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // App Icon and Name
+                VStack(spacing: 8) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 64))
+                        .foregroundColor(.accentColor)
+                    
+                    Text("NotepadClone2")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text("Version \(version) (\(buildNumber))")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Divider()
+                
+                // Description
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("About NotepadClone2")
+                        .font(.headline)
+                    
+                    Text("A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with SwiftUI and AppKit, offering advanced text editing capabilities with a native macOS experience.")
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                Divider()
+                
+                // Key Features
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Key Features")
+                        .font(.headline)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        FeatureRow(icon: "doc.on.doc", text: "Multi-tab editing with unlimited documents")
+                        FeatureRow(icon: "paintbrush", text: "Syntax highlighting for 15+ languages")
+                        FeatureRow(icon: "magnifyingglass", text: "Advanced search & replace with regex")
+                        FeatureRow(icon: "folder", text: "Built-in file explorer with operations")
+                        FeatureRow(icon: "rectangle.split.2x1", text: "Split view editing (horizontal/vertical)")
+                        FeatureRow(icon: "palette", text: "Multiple themes including Notepad++ classic")
+                        FeatureRow(icon: "doc.richtext", text: "Markdown preview and export")
+                        FeatureRow(icon: "terminal", text: "Integrated terminal sessions")
+                        FeatureRow(icon: "curlybraces", text: "Code folding and bracket matching")
+                        FeatureRow(icon: "increase.indent", text: "Smart indentation system")
+                    }
+                }
+                
+                Divider()
+                
+                // System Information
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("System Information")
+                        .font(.headline)
+                    
+                    HStack {
+                        Text("macOS Version:")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(ProcessInfo.processInfo.operatingSystemVersionString)
+                    }
+                    
+                    HStack {
+                        Text("Architecture:")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(ProcessInfo.processInfo.machineArchitecture)
+                    }
+                }
+                
+                Divider()
+                
+                // Links and Actions
+                VStack(spacing: 12) {
+                    HStack(spacing: 20) {
+                        Button("GitHub Repository") {
+                            if let url = URL(string: "https://github.com/itrimble/NotepadClone2") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button("Report Issue") {
+                            if let url = URL(string: "https://github.com/itrimble/NotepadClone2/issues") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    
+                    HStack(spacing: 20) {
+                        Button("Documentation") {
+                            if let url = URL(string: "https://github.com/itrimble/NotepadClone2#readme") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button("Check for Updates") {
+                            if let url = URL(string: "https://github.com/itrimble/NotepadClone2/releases") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                
+                Divider()
+                
+                // Copyright and License
+                VStack(spacing: 4) {
+                    Text("© 2025 Ian Trimble")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Released under the MIT License")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Made with ❤️ using SwiftUI and Claude Code")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .italic()
+                }
+            }
+            .padding()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct FeatureRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .frame(width: 16)
+                .foregroundColor(.accentColor)
+            Text(text)
+                .font(.caption)
+            Spacer()
+        }
+    }
+}
+
+// Extension to get machine architecture
+extension ProcessInfo {
+    var machineArchitecture: String {
+        var size = 0
+        sysctlbyname("hw.machine", nil, &size, nil, 0)
+        var machine = [CChar](repeating: 0, count: Int(size))
+        sysctlbyname("hw.machine", &machine, &size, nil, 0)
+        return String(cString: machine)
     }
 }
 

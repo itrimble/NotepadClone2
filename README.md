@@ -1,6 +1,8 @@
 # NotepadClone2
 
-A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with SwiftUI and AppKit, offering advanced text editing capabilities with a native macOS experience.
+A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with SwiftUI and AppKit, NotepadClone2 brings the beloved multi-tab editing experience of Notepad++ to macOS with native performance, modern design, and advanced coding features.
+
+**🚀 Fast • 🎨 Beautiful • 💻 Native • 🔧 Powerful**
 
 ## Features
 
@@ -48,29 +50,36 @@ A powerful, feature-rich text editor for macOS inspired by Notepad++. Built with
 - 🚀 **Performance Optimized** - Responsive typing and smooth scrolling ✅
 - 🔧 **Native macOS Integration** - Follows macOS design guidelines ✅
 
-## Why NotepadClone2?
+## Why Choose NotepadClone2?
 
-### Notepad++ Features on macOS
-If you're missing Notepad++ on macOS, NotepadClone2 brings you:
-- ✅ Native macOS performance and integration
-- ✅ Familiar multi-tab interface
-- ✅ Powerful search capabilities including Find in Files
-- ✅ Extensive language support with syntax highlighting
-- ✅ Split view editing
-- ✅ Theme customization
-- ✅ Session management
-- ✅ Code folding with visual indicators
-- ✅ Bracket matching with highlighting
-- ✅ Smart indentation
-- ✅ And much more...
+### For Notepad++ Users Missing Their Favorite Editor
+NotepadClone2 brings everything you love about Notepad++ to macOS:
+- ✅ **Familiar Interface** - Multi-tab editing with the same workflow you know
+- ✅ **Powerful Search** - Find/Replace with regex + Find in Files across projects
+- ✅ **Syntax Highlighting** - 15+ languages with customizable themes
+- ✅ **Split View Editing** - Work on multiple files simultaneously
+- ✅ **Session Management** - Restore your workspace exactly as you left it
+- ✅ **Code Intelligence** - Folding, bracket matching, smart indentation
+- ✅ **File Explorer** - Built-in project navigation with operations
+- ✅ **Terminal Integration** - No need to switch between apps
 
-### Built for macOS
-Unlike ports or Wine-based solutions, NotepadClone2 is:
-- 🚀 Native Swift/SwiftUI application
-- 🎨 Follows macOS design guidelines
-- ⚡ Optimized for Apple Silicon
-- 🔒 Sandboxed and secure
-- 🌐 Supports macOS features like Continuity
+### Built Specifically for macOS
+Unlike ports or workarounds, NotepadClone2 is designed from the ground up for Mac:
+- 🚀 **Native Performance** - Pure Swift/SwiftUI, optimized for Apple Silicon
+- 🎨 **macOS Design** - Follows Human Interface Guidelines perfectly
+- ⚡ **Lightning Fast** - No compatibility layers or translation overhead
+- 🔒 **Secure & Reliable** - Sandboxed, App Store ready architecture
+- 🌐 **macOS Integration** - Spotlight, Continuity, and system features work seamlessly
+- 🎯 **Keyboard-First** - Full keyboard navigation with Mac-standard shortcuts
+
+### Perfect for Developers & Writers
+Whether you're coding, writing documentation, or editing configuration files:
+- 📝 **Markdown Excellence** - Live preview with synchronized scrolling and export
+- 💻 **Developer Tools** - Integrated terminal, code folding, smart indentation
+- 🎨 **Customizable** - Multiple themes including the classic Notepad++ look
+- 📁 **Project Management** - File explorer with create/rename/delete operations
+- 🔍 **Advanced Search** - Regex support, Find in Files, Jump to Line
+- 💾 **Never Lose Work** - Auto-save with session recovery
 
 ## Screenshots
 
@@ -86,17 +95,20 @@ Unlike ports or Wine-based solutions, NotepadClone2 is:
 ![Theme Options](screenshots/themes.png)
 *Multiple built-in themes including Notepad++ classic*
 
-## Latest Updates (v3.1.1 - Stability and Bugfix Update)
+## Latest Updates (v3.1.1 - May 31, 2025)
 
-### What's New (YYYY-MM-DD)
-- 💻 **Terminal Integration** - Terminal components are now integrated into the application. ✅
-- 📝 **Markdown Rendering** - Correctly integrated the existing Markdown package for rendering in exports and preview.
-- ✨ **New Themes Added** - "Aqua," "Turbo Pascal," and "Mac OS 8" (placeholders for Turbo Pascal & Mac OS 8).
-- 🐛 **Bug Fixes** - Addressed issues with typing, UI visibility, window restoration, line numbers, tab selection, and "Jump to Line".
-- 🛠️ **Build Fixes** - Resolved compilation errors in `MarkdownSplitView.swift` and `FindInFilesManager.swift`.
-- 💅 **Markdown Export Styling** - Placeholder HTML export is now dark-mode aware.
-- 💾 **Session State Enhanced** - Split view settings are now saved and restored; improved error handling for document session data.
-- 🪵 **Debug Logging** - Added extensive "TYPING_DEBUG:" logs to `CustomTextView`.
+### What's New in v3.1.1 - Stability & Feature Enhancement
+- ✅ **About Section** - Added comprehensive About tab in Preferences with system info and links
+- ✅ **Repository Cleanup** - Merged feature branches and cleaned up old branches
+- ✅ **Documentation Updates** - Enhanced README with better feature descriptions
+- 💻 **Terminal Integration** - Terminal components are now fully integrated into the application
+- 📝 **Markdown Rendering** - Correctly integrated the existing Markdown package for rendering and exports
+- ✨ **New Themes Added** - "Aqua," "Turbo Pascal," and "Mac OS 8" theme options
+- 🐛 **Bug Fixes** - Resolved typing issues, UI visibility, window restoration, line numbers, tab selection, and "Jump to Line"
+- 🛠️ **Build Fixes** - Resolved compilation errors in `MarkdownSplitView.swift` and `FindInFilesManager.swift`
+- 💅 **Markdown Export** - Dark-mode aware HTML export styling
+- 💾 **Session Enhancement** - Split view settings saved and restored with improved error handling
+- 🪵 **Debug Logging** - Comprehensive debugging system for development and troubleshooting
 
 ### Recent Features (v3.0.0)
 - 📁 **File Explorer Sidebar** - Complete file management with tree view
