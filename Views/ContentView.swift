@@ -31,6 +31,12 @@ struct ContentView: View {
     @State private var hasAppeared = false
     @State private var editorVisibleRect: CGRect = .zero // Added for DocumentMapView
 
+    // State for drop target highlights
+    @State private var isTargetedLeft: Bool = false
+    @State private var isTargetedRight: Bool = false
+    @State private var isTargetedTop: Bool = false
+    @State private var isTargetedBottom: Bool = false
+    
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
@@ -163,6 +169,13 @@ struct ContentView: View {
             if appState.showStatusBar {
                 statusBarView() // Further extraction for clarity
             }
+
+            // Detach Drop Zone - always present at the bottom of mainContentView's VStack
+            // It will become more prominent via its own @State isTargeted when a tab is dragged over it.
+            DetachDropZoneView()
+                .environmentObject(appState)
+                // The DetachDropZoneView itself defines its height and appearance.
+                // No need for an AppState.isDraggingTabForDetach check due to revised approach.
         }
     }
 
@@ -200,25 +213,27 @@ struct ContentView: View {
 
     @ViewBuilder
     private func singleEditorView() -> some View {
-        if let currentIndex = appState.currentTab,
-           currentIndex >= 0 && currentIndex < appState.tabs.count {
-            
-            let currentDocument = appState.tabs[currentIndex]
+        ZStack {
+            if let currentIndex = appState.currentTab,
+               currentIndex >= 0 && currentIndex < appState.tabs.count {
 
-            HStack(spacing: 0) {
-                if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
-                    markdownPreviewOrSplitView(for: currentDocument)
-                        .layoutPriority(1) // Ensure editor takes precedence
-                } else {
-                    CustomTextView(
-                        text: $appState.tabs[currentIndex].text,
-                        attributedText: $appState.tabs[currentIndex].attributedText,
-                        appTheme: appState.appTheme,
-                        showLineNumbers: appState.showLineNumbers,
-                        language: appState.tabs[currentIndex].language,
-                        document: appState.tabs[currentIndex]
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                let currentDocument = appState.tabs[currentIndex]
+
+                HStack(spacing: 0) {
+                    if appState.showMarkdownPreview && appState.currentDocumentIsMarkdown {
+                        markdownPreviewOrSplitView(for: currentDocument)
+                            .layoutPriority(1) // Ensure editor takes precedence
+                    } else {
+                        CustomTextView(
+                            text: $appState.tabs[currentIndex].text,
+                            attributedText: $appState.tabs[currentIndex].attributedText,
+                            appTheme: appState.appTheme,
+                            showLineNumbers: appState.showLineNumbers,
+                            language: appState.tabs[currentIndex].language,
+                            document: appState.tabs[currentIndex],
+                            appState: appState // Pass appState here
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("tab_\(currentIndex)_\(currentDocument.id)")
                     .focusable(true)
                     .layoutPriority(1) // Ensure editor takes precedence
@@ -235,6 +250,84 @@ struct ContentView: View {
             Text("No document selected")
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+
+        // Drop Zones for Split View Activation
+        GeometryReader { geometry in
+            let dropTargetWidth: CGFloat = max(50, geometry.size.width * 0.15) // Min 50pt or 15% width
+            let dropTargetHeight: CGFloat = max(50, geometry.size.height * 0.15) // Min 50pt or 15% height
+
+            // Left Drop Zone
+            HStack {
+                Rectangle()
+                    .fill(isTargetedLeft ? Color.blue.opacity(0.3) : Color.clear)
+                    .frame(width: dropTargetWidth)
+                    .contentShape(Rectangle()) // Ensures the clear area is droppable
+                    .onDrop(of: [UTType.text], isTargeted: $isTargetedLeft) { providers in
+                        handleTabDropForSplitView(providers: providers, edge: .leading)
+                        return true
+                    }
+                Spacer()
+            }
+
+            // Right Drop Zone
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(isTargetedRight ? Color.blue.opacity(0.3) : Color.clear)
+                    .frame(width: dropTargetWidth)
+                    .contentShape(Rectangle())
+                    .onDrop(of: [UTType.text], isTargeted: $isTargetedRight) { providers in
+                        handleTabDropForSplitView(providers: providers, edge: .trailing)
+                        return true
+                    }
+            }
+
+            // Top Drop Zone
+            VStack {
+                Rectangle()
+                    .fill(isTargetedTop ? Color.blue.opacity(0.3) : Color.clear)
+                    .frame(height: dropTargetHeight)
+                    .contentShape(Rectangle())
+                    .onDrop(of: [UTType.text], isTargeted: $isTargetedTop) { providers in
+                        handleTabDropForSplitView(providers: providers, edge: .top)
+                        return true
+                    }
+                Spacer()
+            }
+
+            // Bottom Drop Zone
+            VStack {
+                Spacer()
+                Rectangle()
+                    .fill(isTargetedBottom ? Color.blue.opacity(0.3) : Color.clear)
+                    .frame(height: dropTargetHeight)
+                    .contentShape(Rectangle())
+                    .onDrop(of: [UTType.text], isTargeted: $isTargetedBottom) { providers in
+                        handleTabDropForSplitView(providers: providers, edge: .bottom)
+                        return true
+                    }
+            }
+        }
+        .allowsHitTesting(!appState.splitViewEnabled) // Only enable drop zones when not already split
+    }
+}
+
+    private func handleTabDropForSplitView(providers: [NSItemProvider], edge: Edge) {
+        guard !appState.splitViewEnabled else { return } // Only activate if not already split
+
+        guard let item = providers.first else { return }
+
+        item.loadObject(ofClass: NSString.self) { (draggedString, error) in
+            if let error = error {
+                print("Error loading dragged tab data: \(error.localizedDescription)")
+                return
+            }
+            if let draggedString = draggedString as? String, let sourceIndex = Int(draggedString) {
+                DispatchQueue.main.async {
+                    self.appState.activateSplitViewWithDraggedTab(draggedTabIndex: sourceIndex, dropEdge: edge)
+                }
+            }
         }
     }
 
@@ -449,7 +542,8 @@ struct ContentView: View {
                         appTheme: appState.appTheme,
                         showLineNumbers: appState.showLineNumbers,
                         language: document.language, // Use document's language
-                        document: document // Pass the document itself
+                        document: document, // Pass the document itself
+                        appState: appState // Pass appState here
                     )
                     .id("split_pane_\(index)_\(document.id)_\(refreshTrigger.id)") // Ensure unique ID
                     .layoutPriority(1) // Ensure editor takes precedence

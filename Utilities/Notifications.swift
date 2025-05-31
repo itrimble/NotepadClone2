@@ -40,6 +40,9 @@ extension Notification.Name {
     static let minimapNavigateToRatio = Notification.Name("minimapNavigateToRatio")
     static let customTextViewDidScroll = Notification.Name("customTextViewDidScroll")
     
+    // Terminal notifications
+    static let sendTextToTerminal = Notification.Name("sendTextToTerminalNotification")
+    
     // Helper for posting typed notifications
     static func post(name: Notification.Name, object: Any? = nil, userInfo: [String: Any]? = nil) {
         NotificationCenter.default.post(name: name, object: object, userInfo: userInfo)

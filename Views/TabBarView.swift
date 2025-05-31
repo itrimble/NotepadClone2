@@ -13,6 +13,10 @@ struct TabBarView: View {
                         isSelected: index == appState.currentTab
                     )
                     .environmentObject(appState)
+                    .onDrag {
+                        // Provide the index of the dragged tab
+                        NSItemProvider(object: String(index) as NSString)
+                    }
                 }
                 
                 // Add New Tab Button - Modified for direct action
@@ -35,6 +39,115 @@ struct TabBarView: View {
         .padding(.horizontal, 8)
         .padding(.top, 4)
         .background(Color(appState.appTheme.tabBarBackgroundColor()))
+        .onDrop(of: [UTType.text], delegate: TabDropDelegate(appState: appState, currentTabs: $appState.tabs))
+    }
+}
+
+struct TabDropDelegate: DropDelegate {
+    let appState: AppState
+    @Binding var currentTabs: [Document]
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard info.hasItemsConforming(to: [UTType.text]) else {
+            return false
+        }
+
+        let items = info.itemProviders(for: [UTType.text])
+        guard let item = items.first else { return false }
+
+        item.loadObject(ofClass: NSString.self) { (draggedString, error) in
+            if let draggedString = draggedString as? String, let sourceIndex = Int(draggedString) {
+                DispatchQueue.main.async {
+                    let dropLocation = info.location
+                    var calculatedDestinationIndex = self.currentTabs.count // Default to end
+
+                    // This approximation needs to be robust.
+                    // It assumes TabButtons are of a somewhat consistent width.
+                    // The padding/spacing of HStack and TabButton also matters.
+                    // For an Hstack with spacing 0, and TabButtons with padding:
+                    // Effective width = Text width + padding + close button width etc.
+                    let tabButtonPadding: CGFloat = 8 * 2 // padding.horizontal for TabButton's HStack
+                    let closeButtonWidth: CGFloat = 10 + 2 // Approx. systemName("xmark").width + padding
+                    let textWidthApproximation: CGFloat = 60 // Average text width
+                    let approximateTabWidth: CGFloat = textWidthApproximation + tabButtonPadding + closeButtonWidth
+                    // Spacing in the parent HStack is 0.
+
+                    if self.currentTabs.isEmpty {
+                        calculatedDestinationIndex = 0
+                    } else {
+                        var currentXOffset: CGFloat = 0
+                        var foundDestination = false
+                        for i in 0..<self.currentTabs.count {
+                            let tabMidX = currentXOffset + approximateTabWidth / 2
+                            if dropLocation.x < tabMidX {
+                                calculatedDestinationIndex = i
+                                foundDestination = true
+                                break
+                            }
+                            currentXOffset += approximateTabWidth
+                        }
+                        if !foundDestination {
+                             // If dropLocation.x was greater than all midpoints, it's at the end
+                            calculatedDestinationIndex = self.currentTabs.count
+                        }
+                    }
+
+                    // `calculatedDestinationIndex` is the "visual slot" index.
+                    // This is the index where the tab should appear in the list.
+                    // If sourceIndex is 0, and we drop it at visual slot 2 (among 3 tabs A, B, C -> B, C, A (visually B, A, C initially))
+                    // sourceIndex = 0 (A)
+                    // calculatedDestinationIndex = 2 (meaning after C, if A was not there)
+                    // A B C -> remove A -> B C. Insert A at index 2 -> B C A. Correct.
+
+                    // If sourceIndex is 2 (C), and we drop it at visual slot 0
+                    // A B C -> remove C -> A B. Insert C at index 0 -> C A B. Correct.
+
+                    print("Drop attempt: source \(sourceIndex), visual dest \(calculatedDestinationIndex), dropLoc.x \(dropLocation.x), approxTabWidth \(approximateTabWidth)")
+
+                    // No need to adjust calculatedDestinationIndex due to removal of sourceIndex,
+                    // as AppState.moveTab's destinationIndex is the target index in the list *after* removal.
+                    // However, if we are moving an item from left to right, and the target visual slot is `d`,
+                    // after removing the item at `s` (where `s < d`), the target slot `d` effectively becomes `d-1`.
+                    // If moving from right to left (`s > d`), the target slot `d` remains `d`.
+
+                    var finalDestinationIndex = calculatedDestinationIndex
+                    if sourceIndex < calculatedDestinationIndex {
+                        // Dragging left-to-right. If tab is dropped at visual index `d`
+                        // it means it should be placed *before* the item currently at `d`.
+                        // After removing `sourceIndex`, items from `sourceIndex+1` to `d-1` shift left.
+                        // So the insertion index becomes `d-1`.
+                        finalDestinationIndex = calculatedDestinationIndex - 1
+                    }
+                    // If sourceIndex > calculatedDestinationIndex, finalDestinationIndex is calculatedDestinationIndex.
+                    // If sourceIndex == calculatedDestinationIndex, it's a no-op (or should be handled by guard in moveTab).
+
+                    // Clamp to valid range for insertion into (potentially) smaller list
+                    finalDestinationIndex = max(0, min(finalDestinationIndex, self.currentTabs.count -1 < 0 ? 0 : self.currentTabs.count -1 ))
+
+
+                    // The guard in AppState.moveTab checks:
+                    // guard sourceIndex != destinationIndex (where destinationIndex is for insertion after removal)
+                    // So, we can call it directly.
+                    self.appState.moveTab(from: sourceIndex, to: finalDestinationIndex)
+                }
+            }
+        }
+        return true
+    }
+
+    // Optional: Provide visual feedback during dragging over
+    func validateDrop(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
+    }
+
+    // Optional: Handle entering the drop zone
+    func dropEntered(info: DropInfo) {
+        // You can use this to change some state for visual feedback
+    }
+
+    // Optional: Handle exiting the drop zone
+    func dropExited(info: DropInfo) {
+        // Reset visual feedback state
     }
 }
 
@@ -106,6 +219,9 @@ struct TabButton: View {
         .contextMenu {
             Button("Rename Tab") {
                 showRenameAlert()
+            }
+            Button("Move to New Window") {
+                appState.requestDetachTabToNewWindow(tabIndex: index)
             }
         }
     }

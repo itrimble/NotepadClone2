@@ -84,10 +84,18 @@ struct TerminalView: NSViewRepresentable {
             self.terminal = terminal
             self.config = config
             super.init()
+
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleSendTextToTerminal(_:)),
+                name: .sendTextToTerminal,
+                object: nil // Observe from any sender, will filter by terminalId
+            )
         }
         
         deinit {
             stopShell()
+            NotificationCenter.default.removeObserver(self, name: .sendTextToTerminal, object: nil)
         }
         
         func startShell() {
@@ -200,6 +208,34 @@ struct TerminalView: NSViewRepresentable {
             }
             
             currentCommand = ""
+        }
+
+        @objc private func handleSendTextToTerminal(_ notification: Notification) {
+            guard let userInfo = notification.userInfo,
+                  let targetTerminalId = userInfo["terminalId"] as? UUID,
+                  targetTerminalId == self.terminal.id, // Ensure this notification is for this specific terminal instance
+                  let textToSend = userInfo["text"] as? String else {
+                return
+            }
+
+            print("TerminalView.Coordinator [\(self.terminal.id)]: Received text to send: \(textToSend.prefix(50))")
+
+            // Display the text in the terminal (as if pasted)
+            appendToTerminal(textToSend, color: config.textColor)
+
+            // Send the text to the shell's input pipe
+            guard let input = inputPipe?.fileHandleForWriting else {
+                appendToTerminal("\nError: Terminal input pipe not available.\n", color: .red)
+                return
+            }
+
+            if let commandData = textToSend.data(using: .utf8) {
+                do {
+                    try input.write(contentsOf: commandData)
+                } catch {
+                    appendToTerminal("\nError writing to terminal: \(error.localizedDescription)\n", color: .red)
+                }
+            }
         }
     }
 }

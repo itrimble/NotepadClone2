@@ -410,6 +410,7 @@ struct CustomTextView: NSViewRepresentable {
     let showLineNumbers: Bool
     let language: SyntaxHighlighter.Language
     let document: Document  // Pass the document directly
+    let appState: AppState // Added AppState
     
     func makeNSView(context: Context) -> NSScrollView {
         print("TYPING_DEBUG: 🔧 CustomTextView.makeNSView - Creating ColumnarNSTextView and NSScrollView")
@@ -488,7 +489,7 @@ struct CustomTextView: NSViewRepresentable {
         
         // Set up initial theme
         context.coordinator.updateTheme(textView)
-        context.coordinator.textView = textView // Store textView instance
+        context.coordinator.textView = textView // Store weak reference to textView
 
         // Setup bounds observer for scrolling
         if let clipView = scrollView.contentView as? NSClipView {
@@ -630,13 +631,13 @@ struct CustomTextView: NSViewRepresentable {
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(self, appState: self.appState) // Pass appState
+        Coordinator(self, appState: appState) // Pass appState to Coordinator
     }
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CustomTextView
-        private let appState: AppState // Property to hold AppState
-        weak var textView: NSTextView? // Added property to store textView
+        let appState: AppState // Store AppState
+        weak var textView: NSTextView? // Weak reference to the text view
         private var isUpdating = false
         private var lastText = ""
         var isBeingRemoved = false // Track if view is being dismantled
@@ -658,7 +659,7 @@ struct CustomTextView: NSViewRepresentable {
             }
         }
         
-        init(_ parent: CustomTextView, appState: AppState) { // Add appState parameter
+        init(_ parent: CustomTextView, appState: AppState) { // Modified init
             self.parent = parent
             self.appState = appState // Store appState
             super.init()
@@ -1056,6 +1057,160 @@ struct CustomTextView: NSViewRepresentable {
                 userInfo: ["visibleRect": visibleRect, "documentId": parent.document.id]
             )
             print("TYPING_DEBUG: SCROLL_UPDATE - Posted .customTextViewDidScroll with rect: \(visibleRect), docID: \(parent.document.id)")
+=======
+        // MARK: - Context Menu Customization
+        func textView(_ textView: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
+            // It's usually better to augment the default menu rather than creating a new one from scratch.
+            // However, the exact method to get the "super" menu in this delegate context can be tricky.
+            // For this implementation, we'll add to the provided menu or create a new one if nil.
+            // A more robust approach might involve `textView.menu` directly if appropriate.
+
+            let augmentedMenu = menu // Use the menu passed by the system.
+            var currentInsertIndex = 0
+
+            // "Explain This Code" menu item
+            let explainMenuItem = NSMenuItem(
+                title: "Explain This Code",
+                action: #selector(explainSelectedCodeAction(_:)),
+                keyEquivalent: ""
+            )
+            explainMenuItem.target = self
+            explainMenuItem.representedObject = textView
+            explainMenuItem.isEnabled = textView.selectedRange().length > 0
+
+            augmentedMenu.insertItem(explainMenuItem, at: currentInsertIndex)
+            currentInsertIndex += 1
+
+            // "Generate Docstring" menu item
+            let docstringMenuItem = NSMenuItem(
+                title: "Generate Docstring",
+                action: #selector(generateDocstringAction(_:)),
+                keyEquivalent: ""
+            )
+            docstringMenuItem.target = self
+            docstringMenuItem.representedObject = textView
+            docstringMenuItem.isEnabled = textView.selectedRange().length > 0
+
+            augmentedMenu.insertItem(docstringMenuItem, at: currentInsertIndex)
+            currentInsertIndex += 1
+
+            // Add a separator before these custom items if menu is not empty,
+            // or ensure it's at a logical place if augmenting a standard menu.
+            if currentInsertIndex > 0 && !augmentedMenu.items.isEmpty && augmentedMenu.items.first?.isSeparatorItem == false {
+                 // Check if the very first item (after our insertions) is not a separator.
+                 // This logic might need adjustment based on where system items are.
+                 // A simpler approach: always add separator at index 0 IF we added items.
+            }
+             augmentedMenu.insertItem(NSMenuItem.separator(), at: 0)
+
+
+            return augmentedMenu
+        }
+
+        @objc func explainSelectedCodeAction(_ sender: Any?) {
+            guard let textView = self.textView, textView.selectedRange().length > 0 else {
+                print("Explain Code: No text selected or textView not available.")
+                return
+            }
+
+            let selectedText = (textView.string as NSString).substring(with: textView.selectedRange())
+            let prompt = "Explain the following code snippet:\n\n\(selectedText)"
+
+            let previewLength = 50 // Show a short preview of the code being explained
+            let codePreview = String(selectedText.prefix(previewLength)) + (selectedText.count > previewLength ? "..." : "")
+            let contextMsg = "Explaining code snippet: \n`\(codePreview)`"
+
+            print("Explain Code: Submitting prompt for selected text (length: \(selectedText.count))")
+            self.appState.aiManager.submitPrompt(prompt: prompt, contextMessage: contextMsg) { [weak self] result in
+                guard let self = self else { return }
+                switch result {
+                case .success(let explanation):
+                    print("Explain Code: Successfully received explanation (length: \(explanation.count)).")
+                case .failure(let error):
+                    print("Explain Code: Error receiving explanation: \(error.localizedDescription)")
+                }
+                // Ensure panel is shown if not already, AIManager handles content.
+                DispatchQueue.main.async {
+                    self.appState.showAIAssistantPanel = true
+                }
+            }
+            // Show panel immediately after starting the request.
+            self.appState.showAIAssistantPanel = true
+            print("Explain Code: Requested to show AI Assistant Panel.")
+        }
+
+        @objc func generateDocstringAction(_ sender: Any?) {
+            guard let textView = self.textView, textView.selectedRange().length > 0 else {
+                print("Generate Docstring: No text selected or textView not available.")
+                return
+            }
+
+            let selectedText = (textView.string as NSString).substring(with: textView.selectedRange())
+            let languageName = parent.language.rawValue // Assuming language has a rawValue string like "Swift", "Python"
+            let prompt = "Generate a well-formatted docstring for the following \(languageName) code snippet. Ensure the docstring is suitable for direct insertion above the code in a source file. For Swift, use '///' comments. For Python, use triple quotes. For other languages like JavaScript, C++, Java, use JSDoc/Doxygen/Javadoc style comments respectively. If language is 'none' or unknown, use a generic block comment (e.g., /* ... */).\n\nCode:\n\(selectedText)"
+
+            print("Generate Docstring: Submitting prompt for selected text (length: \(selectedText.count))")
+            self.appState.aiManager.submitPrompt(prompt: prompt, contextMessage: nil) { [weak self] result in
+                guard let self = self, let textView = self.textView else { return }
+
+                switch result {
+                case .success(let aiResponse):
+                    print("Generate Docstring: Successfully received AI response.")
+                    let generatedDocstring = aiResponse.content
+
+                    let selectedRange = textView.selectedRange()
+                    let (currentLineRange, currentLineIndentation) = self.getLineInfo(for: selectedRange.location, in: textView)
+                    let indentedDocstring = self.indentDocstring(generatedDocstring, with: currentLineIndentation)
+                    let finalDocstring = indentedDocstring + "\n"
+
+                    // Perform Text Insertion
+                    if textView.shouldChangeText(in: NSRange(location: currentLineRange.location, length: 0), replacementString: finalDocstring) {
+                        textView.textStorage?.insert(NSAttributedString(string: finalDocstring, attributes: self.defaultAttributes()), at: currentLineRange.location)
+                        textView.didChangeText() // Notifies delegate about the change
+                        print("Generate Docstring: Inserted docstring at location \(currentLineRange.location).")
+                    } else {
+                        print("Generate Docstring: Failed to insert docstring - shouldChangeTextIn returned false.")
+                        self.appState.aiManager.latestResponseContent = "Error: Could not insert generated docstring."
+                        self.appState.showAIAssistantPanel = true
+                    }
+
+                case .failure(let error):
+                    print("Generate Docstring: Error receiving explanation: \(error.localizedDescription)")
+                    self.appState.aiManager.latestResponseContent = "Error generating docstring: \(error.localizedDescription)"
+                    self.appState.showAIAssistantPanel = true
+                }
+            }
+        }
+
+        // Helper methods for docstring generation
+        private func getLineInfo(for characterIndex: Int, in textView: NSTextView) -> (lineRange: NSRange, indentation: String) {
+            let fullText = textView.string as NSString
+            let lineRange = fullText.lineRange(for: NSRange(location: characterIndex, length: 0))
+            let lineText = fullText.substring(with: lineRange)
+
+            var indentation = ""
+            for char in lineText {
+                if char.isWhitespace && char != "\n" && char != "\r" { // Check for actual whitespace characters
+                    indentation.append(char)
+                } else {
+                    break
+                }
+            }
+            return (lineRange, indentation)
+        }
+
+        private func indentDocstring(_ docstring: String, with indentation: String) -> String {
+            // If the docstring already seems to have its own consistent indentation (common for LLM outputs for block comments),
+            // and our target indentation is empty, we might not want to add extra spaces to every line.
+            // However, for typical cases where we want to align it with the code block, prepending is correct.
+
+            let lines = docstring.components(separatedBy: "\n")
+            // Only add indentation if it's not empty. Avoids adding empty strings to lines if original indent is empty.
+            if indentation.isEmpty {
+                return docstring
+            }
+            return lines.map { indentation + $0 }.joined(separator: "\n")
+>>>>>>> feature/terminal-enhancements
         }
     }
 }
@@ -1063,6 +1218,7 @@ struct CustomTextView: NSViewRepresentable {
 // Preview for Xcode development
 #Preview {
     struct PreviewWrapper: View {
+        @StateObject var appState = AppState() // Use @StateObject for AppState in Preview
         @State private var text = "Sample text for preview"
         @State private var attributedText = NSAttributedString(string: "Sample text for preview", attributes: [
             .font: NSFont.systemFont(ofSize: 14),
@@ -1072,14 +1228,17 @@ struct CustomTextView: NSViewRepresentable {
         var body: some View {
             let document = Document()
             document.language = .swift
+            // Ensure AppState is also passed to CustomTextView in the preview
             return CustomTextView(
                 text: $text, 
                 attributedText: $attributedText, 
                 appTheme: .system, 
                 showLineNumbers: true, 
                 language: .swift,
-                document: document
+                document: document,
+                appState: appState // Pass the appState instance
             )
+            .environmentObject(appState) // Also provide it in environment if needed by sub-views not directly passed.
             .frame(width: 400, height: 300)
         }
     }
