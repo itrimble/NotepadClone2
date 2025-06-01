@@ -233,6 +233,33 @@ struct NotepadCloneApp: App {
                 }
                 .keyboardShortcut("i", modifiers: [.command, .option])
             }
+
+            // Navigate Menu (including Bookmarks)
+            CommandMenu("Navigate") {
+                Menu("Bookmarks") {
+                    Button("Toggle Bookmark") {
+                        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(ColumnarNSTextView.toggleCurrentLineBookmark(_:)), with: nil)
+                    }
+                    .keyboardShortcut("B", modifiers: [.command, .shift])
+
+                    Button("Next Bookmark") {
+                        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(ColumnarNSTextView.navigateToNextBookmark(_:)), with: nil)
+                    }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+
+                    Button("Previous Bookmark") {
+                        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(ColumnarNSTextView.navigateToPreviousBookmark(_:)), with: nil)
+                    }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+
+                    Divider()
+
+                    Button("Clear All Bookmarks") {
+                        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(ColumnarNSTextView.clearAllBookmarksInDocument(_:)), with: nil)
+                    }
+                }
+                // Other navigation items can be added here, e.g., Go to Line (already in Search), Go to Definition etc.
+            }
             
             // Format Menu
             CommandMenu("Format") {

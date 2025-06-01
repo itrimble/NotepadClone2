@@ -60,6 +60,7 @@ class Document: ObservableObject, Identifiable {
     
     // Code folding state
     @Published var foldedRegions: Set<FoldableRegion> = []
+    @Published var bookmarks: Set<Int> = [] // 0-based line indices
     
     // Theme tracking
     var appTheme: AppTheme = .system {
@@ -371,6 +372,7 @@ class Document: ObservableObject, Identifiable {
         let customName: String?
         let fileURLPath: String?
         let foldedRegions: [FoldableRegionState]
+        let bookmarks: Set<Int>? // Optional for backward compatibility
         
         // Initialize from Document
         init(from document: Document) {
@@ -380,6 +382,7 @@ class Document: ObservableObject, Identifiable {
             self.customName = document.customName
             self.fileURLPath = document.fileURL?.path
             self.foldedRegions = document.foldedRegions.map { FoldableRegionState(from: $0) }
+            self.bookmarks = document.bookmarks
         }
     }
     
@@ -398,10 +401,61 @@ class Document: ObservableObject, Identifiable {
             fileURL = URL(fileURLWithPath: urlPath)
         }
         foldedRegions = Set(state.foldedRegions.map { $0.toFoldableRegion() })
+        bookmarks = state.bookmarks ?? [] // Use empty set if not present in saved state
     }
     
     // MARK: - Session State Management
     
+    // MARK: - Bookmark Management
+    func toggleBookmark(lineNumber: Int) { // 0-based
+        if bookmarks.contains(lineNumber) {
+            bookmarks.remove(lineNumber)
+        } else {
+            bookmarks.insert(lineNumber)
+        }
+        self.hasUnsavedChanges = true // Bookmarks are part of saveable state
+        objectWillChange.send() // Notify views of change
+    }
+
+    func addBookmark(lineNumber: Int) { // 0-based
+        let (inserted, _) = bookmarks.insert(lineNumber)
+        if inserted {
+            self.hasUnsavedChanges = true
+            objectWillChange.send()
+        }
+    }
+
+    func removeBookmark(lineNumber: Int) { // 0-based
+        if bookmarks.remove(lineNumber) != nil {
+            self.hasUnsavedChanges = true
+            objectWillChange.send()
+        }
+    }
+
+    func isLineBookmarked(lineNumber: Int) -> Bool { // 0-based
+        return bookmarks.contains(lineNumber)
+    }
+
+    func removeAllBookmarks() {
+        if !bookmarks.isEmpty {
+            bookmarks.removeAll()
+            self.hasUnsavedChanges = true
+            objectWillChange.send()
+        }
+    }
+
+    func nextBookmark(after currentLine: Int) -> Int? { // 0-based
+        // Ensure bookmarks are sorted to find the next one correctly
+        let sortedBookmarks = bookmarks.sorted()
+        return sortedBookmarks.first { $0 > currentLine }
+    }
+
+    func previousBookmark(before currentLine: Int) -> Int? { // 0-based
+        // Ensure bookmarks are sorted (descending for previous)
+        let sortedBookmarks = bookmarks.sorted(by: >) // Sort descending
+        return sortedBookmarks.first { $0 < currentLine }
+    }
+
     static func fromState(_ state: DocumentState) -> Document {
         // Create document with existing ID
         guard let restoredID = UUID(uuidString: state.id) else {

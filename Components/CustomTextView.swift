@@ -633,6 +633,78 @@ class ColumnarNSTextView: NSTextView {
         // This assumes `triggerCompletionManually` is a method on ColumnarNSTextView itself.
         self.triggerCompletionManually()
     }
+
+    // MARK: - Bookmark Actions
+    @objc func toggleCurrentLineBookmark(_ sender: Any?) {
+        guard let ts = self.textStorage else { return }
+        let (currentLineNumberOneBased, _) = self.lineNumberAndColumn(for: self.selectedRange().location)
+        let zeroBasedLineNumber = currentLineNumberOneBased - 1
+
+        // Ensure document exists via coordinator or direct reference if available
+        let doc = self.columnCoordinator?.parent.document ?? self.document // Assuming self.document is available if coordinator isn't
+        doc?.toggleBookmark(lineNumber: zeroBasedLineNumber)
+    }
+
+    @objc func navigateToNextBookmark(_ sender: Any?) {
+        guard let doc = self.columnCoordinator?.parent.document ?? self.document, !doc.bookmarks.isEmpty else { return }
+        let (currentLineNumberOneBased, _) = self.lineNumberAndColumn(for: self.selectedRange().location)
+        let currentLineNumberZeroBased = currentLineNumberOneBased - 1
+
+        if let nextBookmarkLine = doc.nextBookmark(after: currentLineNumberZeroBased) {
+            navigateToLine(nextBookmarkLine)
+        } else if let firstBookmark = doc.bookmarks.sorted().first { // Wrap around
+            navigateToLine(firstBookmark)
+        }
+    }
+
+    @objc func navigateToPreviousBookmark(_ sender: Any?) {
+        guard let doc = self.columnCoordinator?.parent.document ?? self.document, !doc.bookmarks.isEmpty else { return }
+        let (currentLineNumberOneBased, _) = self.lineNumberAndColumn(for: self.selectedRange().location)
+        let currentLineNumberZeroBased = currentLineNumberOneBased - 1
+
+        if let prevBookmarkLine = doc.previousBookmark(before: currentLineNumberZeroBased) {
+            navigateToLine(prevBookmarkLine)
+        } else if let lastBookmark = doc.bookmarks.sorted().last { // Wrap around
+            navigateToLine(lastBookmark)
+        }
+    }
+
+    @objc func clearAllBookmarksInDocument(_ sender: Any?) {
+        let doc = self.columnCoordinator?.parent.document ?? self.document
+        doc?.removeAllBookmarks()
+    }
+
+    private func navigateToLine(_ lineNumberZeroBased: Int) {
+        guard let ts = self.textStorage else { return }
+        if ts.length == 0 && lineNumberZeroBased == 0 {
+            self.setSelectedRange(NSRange(location: 0, length: 0))
+            self.scrollRangeToVisible(NSRange(location: 0, length: 0))
+            return
+        }
+        guard ts.length > 0 else { return }
+
+        var charIndex = 0
+        var currentLine = 0
+        let nsString = ts.string as NSString
+
+        while currentLine < lineNumberZeroBased && charIndex < nsString.length {
+            let lineRange = nsString.lineRange(for: NSRange(location: charIndex, length: 0))
+            charIndex = NSMaxRange(lineRange)
+            currentLine += 1
+            if charIndex >= nsString.length && currentLine < lineNumberZeroBased {
+                // This means we're trying to navigate to a line that doesn't exist (e.g., line 5 in a 3-line doc)
+                // Set to the end of the last actual line.
+                charIndex = nsString.length
+                break
+            }
+        }
+        charIndex = min(charIndex, nsString.length) // Ensure it's not out of bounds
+
+        let targetRange = NSRange(location: charIndex, length: 0)
+        self.setSelectedRange(targetRange)
+        self.scrollRangeToVisible(targetRange)
+        self.window?.makeFirstResponder(self)
+   }
 }
 
 struct CustomTextView: NSViewRepresentable {
@@ -705,6 +777,7 @@ struct CustomTextView: NSViewRepresentable {
             // Create and configure line number ruler with folding support
             let lineNumberView = CodeFoldingRulerView(scrollView: scrollView, orientation: .verticalRuler)
             lineNumberView.clientView = textView
+            lineNumberView.document = parent.document // Pass document reference
             lineNumberView.ruleThickness = 60.0  // Wider to accommodate fold controls
             lineNumberView.backgroundColor = NSColor(appTheme.tabBarBackgroundColor())
             lineNumberView.textColor = appTheme.editorTextColor() // Make base color more solid
@@ -782,14 +855,15 @@ struct CustomTextView: NSViewRepresentable {
             if let codeRulerView = nsView.verticalRulerView as? CodeFoldingRulerView {
                 codeRulerView.backgroundColor = NSColor(appTheme.tabBarBackgroundColor())
                 codeRulerView.textColor = appTheme.editorTextColor() // Make base color more solid
+                codeRulerView.document = parent.document // Ensure document is updated
                 
                 // Add color clash logging for line number ruler
                 if codeRulerView.textColor.isApproximatelyEqual(to: codeRulerView.backgroundColor) {
                     print("TYPING_DEBUG: WARNING LineNumberView.updateNSView - Line number text color and background color are very similar. Line numbers may be invisible. Text Color: \(codeRulerView.textColor), Background Color: \(codeRulerView.backgroundColor)")
                 }
 
-                codeRulerView.language = language // This was already here
-                codeRulerView.needsDisplay = true    // This was already here
+                codeRulerView.language = language
+                codeRulerView.needsDisplay = true
             }
         } else {
             nsView.hasVerticalRuler = false
@@ -1619,6 +1693,7 @@ class CodeFoldingRulerView: NSRulerView {
     var backgroundColor: NSColor = NSColor.controlBackgroundColor
     var language: SyntaxHighlighter.Language = .none
     weak var coordinator: CustomTextView.Coordinator?
+    weak var document: Document? // Reference to the document model
     
     override init(scrollView: NSScrollView?, orientation: NSRulerView.Orientation) {
         super.init(scrollView: scrollView, orientation: orientation)
@@ -1690,13 +1765,29 @@ class CodeFoldingRulerView: NSRulerView {
             lineNumberString.draw(at: lineNumberPoint, withAttributes: attributes)
             
             // Draw fold control if this line starts a foldable region
+            let foldControlXPosition: CGFloat = 18 // X position for folding controls
             if let region = regionsByStartLine[lineNumber] {
-                self.drawFoldControl(for: region, at: NSPoint(x: 5, y: y), coordinator: coordinator)
+                self.drawFoldControl(for: region, at: NSPoint(x: foldControlXPosition, y: y), coordinator: coordinator)
+            }
+
+            // Draw bookmark marker if line is bookmarked
+            let zeroBasedLineNumber = lineNumber - 1
+            if document?.isLineBookmarked(lineNumber: zeroBasedLineNumber) == true {
+                let markerSize: CGFloat = 8
+                let bookmarkMarkerXPosition: CGFloat = 3 // X position for bookmarks (leftmost)
+                let markerRect = NSRect(x: bookmarkMarkerXPosition,
+                                        y: y + (lineRect.height - markerSize) / 2, // Vertically center on the line
+                                        width: markerSize,
+                                        height: markerSize)
+                let path = NSBezierPath(ovalIn: markerRect)
+                (document?.appTheme.terminalCursorColor() ?? NSColor.systemBlue).setFill() // Use a theme-aware color (using terminalCursorColor as an example, can be specific)
+                path.fill()
             }
         }
     }
     
     private func drawFoldControl(for region: FoldableRegion, at point: NSPoint, coordinator: CustomTextView.Coordinator) {
+        // point.x already contains the desired X position (e.g., 18 for folding controls)
         let isFolded = coordinator.isFolded(region)
         let controlSize: CGFloat = 12
         let controlRect = NSRect(x: point.x, y: point.y + 2, width: controlSize, height: controlSize)
@@ -1740,20 +1831,60 @@ class CodeFoldingRulerView: NSRulerView {
     }
     
     override func mouseDown(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
+        let clickLocationInView = self.convert(event.locationInWindow, from: nil)
         
-        guard let coordinator = coordinator else {
+        guard let textView = self.clientView as? NSTextView,
+              let layoutManager = textView.layoutManager,
+              let textContainer = textView.textContainer,
+              let document = self.document else {
             super.mouseDown(with: event)
             return
         }
+
+        // Determine clicked line number (0-based)
+        // Use characterIndexForPoint to get the character index at the click.
+        let charIndex = layoutManager.characterIndex(for: clickLocationInView, in: textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
         
-        // Check if click is on a fold control
-        if let region = foldableRegionAt(point: point) {
-            coordinator.toggleFold(for: region)
-            needsDisplay = true
-        } else {
-            super.mouseDown(with: event)
+        var zeroBasedClickedLine = 0
+        let textNSString = textView.string as NSString
+        if charIndex < textNSString.length {
+            for i in 0..<charIndex {
+                if textNSString.character(at: i) == 10 { // Newline character
+                    zeroBasedClickedLine += 1
+                }
+            }
+        } else if textNSString.length > 0 {
+            zeroBasedClickedLine = textNSString.components(separatedBy: "\n").count - 1
         }
+
+
+        // Define hit test areas based on X coordinates used in drawing
+        let bookmarkMarkerXPosition: CGFloat = 3
+        let bookmarkMarkerWidth: CGFloat = 12 // Slightly wider tappable area
+        let foldControlXPosition: CGFloat = 18
+        let foldControlWidth: CGFloat = 12
+
+        let bookmarkClickRect = NSRect(x: bookmarkMarkerXPosition, y: clickLocationInView.y - 8, width: bookmarkMarkerWidth, height: 16) // Assume 16pt high tappable area around click.y
+        let foldClickRect = NSRect(x: foldControlXPosition, y: clickLocationInView.y - 8, width: foldControlWidth, height: 16)
+
+        if foldClickArea.contains(clickLocationInView) { // Check X and Y proximity for fold
+            if let region = foldableRegionAt(point: clickLocationInView) {
+                coordinator?.toggleFold(for: region)
+                self.needsDisplay = true
+                return
+            }
+        }
+
+        if bookmarkClickRect.contains(clickLocationInView) { // Check X and Y proximity for bookmark
+            let totalLines = max(1, textNSString.components(separatedBy: "\n").count)
+            if zeroBasedClickedLine >= 0 && zeroBasedClickedLine < totalLines {
+                document.toggleBookmark(lineNumber: zeroBasedClickedLine)
+                self.needsDisplay = true
+                return
+            }
+        }
+
+        super.mouseDown(with: event)
     }
     
     private func foldableRegionAt(point: NSPoint) -> FoldableRegion? {
