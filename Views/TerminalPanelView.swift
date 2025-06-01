@@ -4,6 +4,7 @@ struct TerminalPanelView: View {
     @ObservedObject var terminalManager: TerminalManager
     @EnvironmentObject var appState: AppState // Add AppState
     @State private var config: TerminalConfig // Config will be updated based on theme
+    @State private var activeTerminalNeedsFocus: Bool = false
 
     init(terminalManager: TerminalManager) {
         self.terminalManager = terminalManager
@@ -60,8 +61,14 @@ struct TerminalPanelView: View {
             
             // Terminal content
             if let activeTerminal = terminalManager.activeTerminal {
-                TerminalView(terminal: activeTerminal, config: config)
+                TerminalView(terminal: activeTerminal, config: config, needsFocus: $activeTerminalNeedsFocus)
                     .background(Color(config.backgroundColor))
+                    .onChange(of: terminalManager.activeTerminalId) { _ in
+                        activeTerminalNeedsFocus = true // Request focus when active terminal changes
+                    }
+                    .onAppear {
+                        activeTerminalNeedsFocus = true // Request focus when view appears initially or an existing terminal becomes active
+                    }
             } else {
                 Text("No terminal selected")
                     .foregroundColor(.secondary)

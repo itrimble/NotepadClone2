@@ -4,6 +4,7 @@ import AppKit
 struct TerminalView: NSViewRepresentable {
     @ObservedObject var terminal: Terminal
     let config: TerminalConfig
+    @Binding var needsFocus: Bool // New binding
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -41,8 +42,8 @@ struct TerminalView: NSViewRepresentable {
         scrollView.documentView = textView
         scrollView.backgroundColor = config.backgroundColor
         
-        // Start the shell process
-        context.coordinator.startShell()
+        // Start the shell process using the model's method
+        context.coordinator.terminal.startProcess(config: config)
         
         return scrollView
     }
@@ -58,10 +59,25 @@ struct TerminalView: NSViewRepresentable {
         
         // Update output text
         if textView.textStorage?.attributedString != terminal.outputText {
+            let currentSelectedRange = textView.selectedRange()
             textView.textStorage?.setAttributedString(terminal.outputText)
-            
-            // Scroll to bottom
-            textView.scrollToEndOfDocument(nil)
+            // Try to restore selection, or scroll to end if selection is at end
+            if currentSelectedRange.location + currentSelectedRange.length == textView.string.count {
+                 textView.scrollToEndOfDocument(nil)
+            } else {
+                // This might be problematic if output replaces current input line,
+                // but for now, preserve selection if not at end.
+                 textView.setSelectedRange(currentSelectedRange)
+            }
+        }
+
+        if needsFocus {
+            DispatchQueue.main.async { // DispatchQueue.main.async to avoid issues during view update cycle
+                if textView.window?.firstResponder != textView {
+                    textView.window?.makeFirstResponder(textView)
+                }
+                self.needsFocus = false // Reset the flag
+            }
         }
     }
     
@@ -70,172 +86,135 @@ struct TerminalView: NSViewRepresentable {
     }
     
     class Coordinator: NSObject, NSTextViewDelegate {
-        let terminal: Terminal
-        let config: TerminalConfig
-        private var process: Process?
-        private var inputPipe: Pipe?
-        private var outputPipe: Pipe?
-        private var errorPipe: Pipe?
-        private var outputHandle: FileHandle?
-        private var errorHandle: FileHandle?
-        private var currentCommand = ""
-        
+        let terminal: Terminal // This is @ObservedObject var terminal from TerminalView
+        let config: TerminalConfig // Keep config for direct use if any, or it can be fetched from terminal model too.
+        // Remove old process management properties: process, inputPipe, outputPipe, errorPipe, outputHandle, errorHandle
+        private var currentCommandInputBuffer: String = "" // Buffer for current line input
+
         init(terminal: Terminal, config: TerminalConfig) {
             self.terminal = terminal
-            self.config = config
+            self.config = config // Store config if needed for view-specific things not covered by model
             super.init()
 
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(handleSendTextToTerminal(_:)),
                 name: .sendTextToTerminal,
-                object: nil // Observe from any sender, will filter by terminalId
+                object: nil
             )
         }
         
         deinit {
-            stopShell()
+            terminal.terminateProcess() // Tell the model to terminate its process
             NotificationCenter.default.removeObserver(self, name: .sendTextToTerminal, object: nil)
         }
-        
-        func startShell() {
-            process = Process()
-            inputPipe = Pipe()
-            outputPipe = Pipe()
-            errorPipe = Pipe()
+
+       // Removed startShell(), stopShell(), handleOutput(_:isError:), appendToTerminal()
+       // Output is now handled by the Terminal model itself.
+
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            // This delegate method is called when the user types.
+            // We want to capture the input, send it to the shell process,
+            // but prevent the NSTextView from actually changing its text directly from user typing,
+            // as all visible text should come from terminal.outputText.
             
-            process?.executableURL = URL(fileURLWithPath: config.shell)
-            process?.arguments = ["-i"] // Interactive shell
-            process?.standardInput = inputPipe
-            process?.standardOutput = outputPipe
-            process?.standardError = errorPipe
-            process?.currentDirectoryURL = URL(fileURLWithPath: terminal.currentDirectory)
+            // This method manages user input.
+            // All output from the shell is handled by the Terminal model and updates outputText.
             
-            // Set up environment
-            var environment = ProcessInfo.processInfo.environment
-            environment["TERM"] = "xterm-256color"
-            environment["LANG"] = "en_US.UTF-8"
-            process?.environment = environment
-            
-            // Set up output handling
-            outputHandle = outputPipe?.fileHandleForReading
-            errorHandle = errorPipe?.fileHandleForReading
-            
-            outputHandle?.readabilityHandler = { [weak self] handle in
-                let data = handle.availableData
-                self?.handleOutput(data, isError: false)
+            let currentTextViewContent = textView.string // Current content of the NSTextView
+            let outputTextFromModel = terminal.outputText.string // Content from the model
+
+            // We only want to process typing that occurs at the very end of the text view,
+            // effectively where the user's input prompt would be.
+            // Also, ensure that the text view is "in sync" or slightly ahead (due to local echo) of the model.
+            // This check helps prevent processing input if the view is not yet updated with latest model output.
+            guard affectedCharRange.location >= outputTextFromModel.count || affectedCharRange.location >= (currentTextViewContent.count - currentCommandInputBuffer.count) else {
+                 // User is trying to edit text that is already "finalized" from the shell output. Disallow.
+                // print("TerminalView: Attempt to edit non-input area. Range: \(affectedCharRange), OutputLength: \(outputTextFromModel.count)")
+                return false
             }
-            
-            errorHandle?.readabilityHandler = { [weak self] handle in
-                let data = handle.availableData
-                self?.handleOutput(data, isError: true)
-            }
-            
-            do {
-                try process?.run()
-                terminal.isRunning = true
-                
-                // Send initial prompt
-                appendToTerminal("\(config.shell.components(separatedBy: "/").last ?? "shell")> ", color: config.textColor)
-            } catch {
-                appendToTerminal("Failed to start shell: \(error.localizedDescription)\n", color: .red)
-            }
-        }
-        
-        func stopShell() {
-            outputHandle?.readabilityHandler = nil
-            errorHandle?.readabilityHandler = nil
-            process?.terminate()
-            process = nil
-            terminal.isRunning = false
-        }
-        
-        private func handleOutput(_ data: Data, isError: Bool) {
-            guard !data.isEmpty else { return }
-            
-            if let string = String(data: data, encoding: .utf8) {
-                DispatchQueue.main.async { [weak self] in
-                    let color = isError ? NSColor.red : self?.config.textColor ?? .white
-                    self?.appendToTerminal(string, color: color)
+
+            if let repString = replacementString {
+                if repString == "\n" { // Enter key
+                    // Append newline to buffer before sending, as shell expects it.
+                    let commandToSend = currentCommandInputBuffer + "\n"
+                    terminal.sendInputToProcess(string: commandToSend)
+
+                    // Append the command (and newline) to the local text view for immediate echo.
+                    // The model will eventually receive this from the shell too.
+                    let locallyEchoedCommand = NSAttributedString(string: currentCommandInputBuffer + "\n", attributes: textView.typingAttributes)
+                    textView.textStorage?.insert(locallyEchoedCommand, at: affectedCharRange.location)
+
+                    currentCommandInputBuffer = "" // Clear buffer
+
+                    // Move cursor to end after insert (NSTextView might do this, but good to be sure)
+                    textView.setSelectedRange(NSMakeRange(affectedCharRange.location + locallyEchoedCommand.length, 0))
+                    textView.scrollToEndOfDocument(nil)
+                    return false // We handled it.
+                } else {
+                    // Any other typed character
+                    currentCommandInputBuffer += repString
+
+                    // Allow NSTextView to display the typed character for local echo.
+                    // This text will be part of the "current input line" visually.
+                    // When the shell echoes, updateNSView will reconcile.
+                    // We need to insert it manually if we are managing the "input line" separately.
+                    // For simplicity, let's assume the text view's typingAttributes are correct.
+                    let typedAttrString = NSAttributedString(string: repString, attributes: textView.typingAttributes)
+                    textView.textStorage?.replaceCharacters(in: affectedCharRange, with: typedAttrString)
+                    currentCommandInputBuffer += repString // Buffer it
+
+                    // Move cursor
+                    textView.setSelectedRange(NSMakeRange(affectedCharRange.location + typedAttrString.length, 0))
+                    return false // We handled it.
+                }
+            } else { // replacementString is nil (e.g., backspace)
+                if affectedCharRange.length == 1 && !currentCommandInputBuffer.isEmpty {
+                    // Standard backspace on the current input line
+                    currentCommandInputBuffer.removeLast()
+                    // Let NSTextView handle the visual change for backspace
+                    textView.textStorage?.replaceCharacters(in: affectedCharRange, with: "")
+                    return false // We handled it.
+                } else if affectedCharRange.length == 1 && currentCommandInputBuffer.isEmpty {
+                    // Backspace when buffer is empty - send ^H (ASCII backspace) or ^? (ASCII DEL)
+                    // Most shells treat ^? (DEL) as backspace. ^H is Ctrl+H.
+                    terminal.sendInputToProcess(string: "\u{7F}") // DEL character
+                    return false // Prevent NSTextView from deleting into displayed output
                 }
             }
+            
+            // Fallback for unhandled cases (should ideally not be reached if logic above is complete)
+            return false // Generally, prevent direct modification unless explicitly handled
         }
         
-        private func appendToTerminal(_ string: String, color: NSColor) {
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: config.font,
-                .foregroundColor: color
-            ]
-            
-            let attributedString = NSAttributedString(string: string, attributes: attributes)
-            let mutableOutput = NSMutableAttributedString(attributedString: terminal.outputText)
-            mutableOutput.append(attributedString)
-            
-            terminal.outputText = mutableOutput
+       // textView(_:doCommandBy:) is removed as per prompt's new shouldChangeTextIn logic.
+
+        @objc private func handleSendTextToTerminal(_ notification: Notification) {
+            // This often leads to a custom NSTextStorage or more complex management.
+            // The current model of replacing entire outputText in updateNSView is simple but might flicker or lose typed input.
+            // A more robust solution would be for `appendToTerminal` to be on the Coordinator,
+            // which updates the NSTextView's TextStorage directly, and the model's `outputText`
+            // is just for persistence or if the view is recreated.
+            // For this refactor, let's assume `updateNSView` is smart enough or happens fast enough.
         }
         
-        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                // Handle return key - execute command
-                if let textStorage = textView.textStorage {
-                    let text = textStorage.string
-                    let lines = text.components(separatedBy: .newlines)
-                    if let lastLine = lines.last {
-                        // Extract command from the last line (after the prompt)
-                        if let promptRange = lastLine.range(of: "> ") {
-                            currentCommand = String(lastLine[promptRange.upperBound...])
-                            executeCommand(currentCommand)
-                            
-                            // Add newline to terminal
-                            appendToTerminal("\n", color: config.textColor)
-                        }
-                    }
-                }
-                return true
-            }
-            return false
-        }
-        
-        private func executeCommand(_ command: String) {
-            guard let input = inputPipe?.fileHandleForWriting else { return }
-            
-            let commandData = (command + "\n").data(using: .utf8) ?? Data()
-            
-            do {
-                try input.write(contentsOf: commandData)
-            } catch {
-                appendToTerminal("Error executing command: \(error.localizedDescription)\n", color: .red)
-            }
-            
-            currentCommand = ""
-        }
+       // textView(_:doCommandBy:) is removed as per prompt's new shouldChangeTextIn logic.
 
         @objc private func handleSendTextToTerminal(_ notification: Notification) {
             guard let userInfo = notification.userInfo,
                   let targetTerminalId = userInfo["terminalId"] as? UUID,
-                  targetTerminalId == self.terminal.id, // Ensure this notification is for this specific terminal instance
+                  targetTerminalId == self.terminal.id,
                   let textToSend = userInfo["text"] as? String else {
                 return
             }
+            // Text sent from external sources (e.g., TerminalManager.sendTextToActiveTerminal)
+            // This text should be sent to the process.
+            // The process will echo it back if that's its behavior.
+            terminal.sendInputToProcess(string: textToSend)
 
-            print("TerminalView.Coordinator [\(self.terminal.id)]: Received text to send: \(textToSend.prefix(50))")
-
-            // Display the text in the terminal (as if pasted)
-            appendToTerminal(textToSend, color: config.textColor)
-
-            // Send the text to the shell's input pipe
-            guard let input = inputPipe?.fileHandleForWriting else {
-                appendToTerminal("\nError: Terminal input pipe not available.\n", color: .red)
-                return
-            }
-
-            if let commandData = textToSend.data(using: .utf8) {
-                do {
-                    try input.write(contentsOf: commandData)
-                } catch {
-                    appendToTerminal("\nError writing to terminal: \(error.localizedDescription)\n", color: .red)
-                }
-            }
+            // Optional: local echo of programmatically sent text for immediate feedback.
+            // This again interacts with how outputText is managed.
+            // (self.terminal as Terminal).appendToOutputText(textToSend, color: self.config.textColor) // If Terminal exposes this and if it's made public
         }
     }
 }

@@ -66,13 +66,15 @@ class TerminalManager: ObservableObject {
     }
     
     func runCommand(_ command: String, in terminal: Terminal) {
-        // This will be implemented when we create the actual terminal view
-        print("Running command: \(command) in terminal: \(terminal.title)")
+        let commandWithNewline = command + "\n" // Ensure newline for shell execution
+        terminal.sendInputToProcess(string: commandWithNewline)
+        // print("Running command: \(command) in terminal: \(terminal.title)") // Keep for debugging if desired
     }
     
     func changeDirectory(_ path: String, in terminal: Terminal) {
-        terminal.currentDirectory = path
-        runCommand("cd \"\(path)\"", in: terminal)
+        terminal.currentDirectory = path // Update model's perspective
+        let cdCommand = "cd \"\(path)\"\n" // Construct cd command
+        terminal.sendInputToProcess(string: cdCommand)
     }
 
     public func sendTextToActiveTerminal(text: String) {
