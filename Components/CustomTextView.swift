@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine // For auto-completion debouncing
 
 // Custom NSTextView subclass for Column Mode features
 class ColumnarNSTextView: NSTextView {
@@ -399,6 +400,44 @@ class ColumnarNSTextView: NSTextView {
 
         print("TYPING_DEBUG: Column paste performed.")
     }
+
+    // Override keyDown to handle auto-completion navigation
+    override func keyDown(with event: NSEvent) {
+        if let coordinator = self.columnCoordinator, coordinator.isCompletionViewPresented {
+            switch event.keyCode {
+            case 126: // Up Arrow
+                coordinator.navigateCompletionList(direction: -1)
+                return // Event handled
+            case 125: // Down Arrow
+                coordinator.navigateCompletionList(direction: 1)
+                return // Event handled
+            case 36:  // Enter
+                coordinator.confirmCurrentSuggestion(in: self)
+                return // Event handled
+            case 48: // Tab
+                 coordinator.confirmCurrentSuggestion(in: self)
+                 return // Event handled
+            case 53:  // Escape
+                coordinator.hideCompletionView()
+                return // Event handled
+            default:
+                break // Let super handle other keys
+            }
+        }
+        super.keyDown(with: event)
+    }
+
+    func triggerCompletionManually() {
+        if let coordinator = self.columnCoordinator {
+            coordinator.triggerAutoCompletion(for: self, textContent: self.string)
+        }
+    }
+
+    @objc func triggerAutoCompletionAction(_ sender: Any?) {
+        // Call the existing manual trigger logic.
+        // This assumes `triggerCompletionManually` is a method on ColumnarNSTextView itself.
+        self.triggerCompletionManually()
+    }
 }
 
 struct CustomTextView: NSViewRepresentable {
@@ -658,10 +697,24 @@ struct CustomTextView: NSViewRepresentable {
                 }
             }
         }
+
+        // MARK: - Auto-Completion Properties
+        let autoCompletionManager: AutoCompletionManager
+        var completionSuggestions: [CompletionSuggestion] = []
+        var selectedSuggestionId: UUID? = nil
+        var isCompletionViewPresented: Bool = false
+        var completionViewHostingController: NSHostingController<CompletionListView>?
+        private var textChangeDebounceCancellable: AnyCancellable?
+        private var lastCursorPositionForCompletion: Int = 0
         
         init(_ parent: CustomTextView, appState: AppState) { // Modified init
             self.parent = parent
             self.appState = appState // Store appState
+            // Initialize AutoCompletionManager
+            self.autoCompletionManager = AutoCompletionManager(providers: [
+                KeywordCompletionProvider(),
+                DocumentWordCompletionProvider()
+            ])
             super.init()
             print("TYPING_DEBUG: 🔧 Coordinator.init - Created coordinator for document \(parent.document.id)")
             
@@ -729,6 +782,19 @@ struct CustomTextView: NSViewRepresentable {
         
         func textDidChange(_ notification: Notification) {
             print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Called. isUpdating: \(isUpdating)")
+
+            // Auto-completion logic
+            if let textView = notification.object as? NSTextView {
+                // Debounce text changes for auto-completion
+                // Cancel any previous debounce subscription
+                textChangeDebounceCancellable?.cancel()
+                textChangeDebounceCancellable = Just(textView.string) // Use Just to create a publisher
+                    .debounce(for: .milliseconds(300), scheduler: RunLoop.main) // 300ms debounce
+                    .sink { [weak self] currentTextContent in
+                        self?.triggerAutoCompletion(for: textView, textContent: currentTextContent)
+                    }
+            }
+
             guard let textView = notification.object as? NSTextView else {
                 print("TYPING_DEBUG: ❌ Coordinator.textDidChange - Not a valid NSTextView")
                 return
@@ -879,6 +945,12 @@ struct CustomTextView: NSViewRepresentable {
             if selectedRange != newRange {
                 selectedRange = newRange
                 
+                // Hide completion view if selection changes significantly
+                if isCompletionViewPresented {
+                    // More sophisticated logic might be needed, e.g., if selection is just moving within a word being completed
+                    hideCompletionView()
+                }
+
                 // Update bracket highlighting
                 updateBracketHighlighting(in: textView)
                 
@@ -988,6 +1060,151 @@ struct CustomTextView: NSViewRepresentable {
             // Apply bracket highlighting
             BracketMatcher.highlightBrackets(in: textView, theme: syntaxTheme)
         }
+
+        // MARK: - Auto-Completion Methods
+
+        func triggerAutoCompletion(for textView: NSTextView, textContent: String) {
+            guard let textStorage = textView.textStorage else { return }
+            let cursorPosition = textView.selectedRange().location
+            self.lastCursorPositionForCompletion = cursorPosition
+
+            // Basic current word extraction (can be improved)
+            let textUpToCursor = (textContent as NSString).substring(to: cursorPosition)
+            let currentWord = textUpToCursor.components(separatedBy: .whitespacesAndNewlines).last ?? ""
+
+            // Placeholder for language identifier - should come from document or app state
+            let languageIdentifier = parent.language.rawValue.lowercased() // e.g., "swift"
+
+            let context = CompletionContext(
+                currentText: textContent,
+                cursorPosition: cursorPosition,
+                languageIdentifier: languageIdentifier,
+                currentWord: currentWord
+            )
+
+            let newSuggestions = autoCompletionManager.fetchSuggestions(context: context)
+
+            if !newSuggestions.isEmpty {
+                completionSuggestions = newSuggestions
+                selectedSuggestionId = newSuggestions.first?.id
+                showCompletionView(at: textView)
+            } else {
+                hideCompletionView()
+            }
+        }
+
+        func showCompletionView(at textView: NSTextView) {
+            guard !completionSuggestions.isEmpty else {
+                hideCompletionView()
+                return
+            }
+
+            if completionViewHostingController == nil {
+                let completionListView = CompletionListView(
+                    suggestions: completionSuggestions,
+                    selectedSuggestionId: Binding(
+                        get: { self.selectedSuggestionId },
+                        set: { self.selectedSuggestionId = $0 }
+                    ),
+                    onSuggestionTap: { suggestion in
+                        self.insertSuggestion(suggestion, in: textView)
+                        self.hideCompletionView()
+                    }
+                )
+                completionViewHostingController = NSHostingController(rootView: completionListView)
+            } else {
+                // Update suggestions if view already exists
+                completionViewHostingController?.rootView.suggestions = completionSuggestions
+                completionViewHostingController?.rootView.selectedSuggestionId = completionSuggestions.first?.id
+            }
+
+            guard let controller = completionViewHostingController else { return }
+
+            // Positioning logic (basic version)
+            let cursorRect: NSRect
+            if let layoutManager = textView.layoutManager, let textContainer = textView.textContainer {
+                 let glyphRange = layoutManager.glyphRange(forCharacterRange: NSRange(location: lastCursorPositionForCompletion, length: 0), actualCharacterRange: nil)
+                 cursorRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+            } else {
+                cursorRect = NSRect(x: 50, y: 50, width: 1, height: 1) // Fallback
+            }
+
+            // Convert cursorRect origin from textContainer coordinates to textView (view) coordinates.
+            let viewCursorOrigin = textView.convert(cursorRect.origin, from: nil) // from: nil assumes textContainer origin is (0,0) relative to textView
+                                                                                // More correctly: textView.convert(cursorRect.origin, from: textView.textContainer) if textContainer had its own origin.
+                                                                                // However, for NSTextView, textContainer is usually at (0,0) of its bounds.
+
+            let viewFrame = CGRect(
+                x: viewCursorOrigin.x + textView.textContainerOrigin.x, // Add textContainerOrigin for correct placement
+                y: viewCursorOrigin.y + textView.textContainerOrigin.y + 20, // Position below cursor line
+                width: 250, // Fixed width for now
+                height: 200 // Max height, will be adjusted by ScrollView
+            )
+            controller.view.frame = viewFrame
+
+            if controller.view.superview == nil {
+                textView.addSubview(controller.view)
+            }
+            isCompletionViewPresented = true
+        }
+
+        func hideCompletionView() {
+            completionViewHostingController?.view.removeFromSuperview()
+            completionViewHostingController = nil // Release controller
+            isCompletionViewPresented = false
+            completionSuggestions = []
+            selectedSuggestionId = nil
+        }
+
+        func insertSuggestion(_ suggestion: CompletionSuggestion, in textView: NSTextView) {
+            guard let textStorage = textView.textStorage else { return }
+
+            let currentWordStart = (textView.string as NSString).range(
+                of: "\\S+$",
+                options: .regularExpression,
+                range: NSRange(location: 0, length: lastCursorPositionForCompletion)
+            ).location
+
+            let rangeToReplace: NSRange
+            if currentWordStart != NSNotFound && currentWordStart < lastCursorPositionForCompletion {
+                 rangeToReplace = NSRange(location: currentWordStart, length: lastCursorPositionForCompletion - currentWordStart)
+            } else {
+                // If no current word (e.g. after a space), insert at cursor
+                rangeToReplace = NSRange(location: lastCursorPositionForCompletion, length: 0)
+            }
+
+
+            if textView.shouldChangeText(in: rangeToReplace, replacementString: suggestion.insertionText) {
+                textStorage.replaceCharacters(in: rangeToReplace, with: suggestion.insertionText)
+                textView.didChangeText() // Manually call if not automatically triggered by replaceCharacters
+
+                // Update cursor position after insertion
+                let newCursorPosition = rangeToReplace.location + (suggestion.insertionText as NSString).length
+                textView.setSelectedRange(NSRange(location: newCursorPosition, length: 0))
+            }
+        }
+
+        func navigateCompletionList(direction: Int) { // 1 for down, -1 for up
+            guard !completionSuggestions.isEmpty, let currentIndex = completionSuggestions.firstIndex(where: { $0.id == selectedSuggestionId }) else {
+                selectedSuggestionId = completionSuggestions.first?.id
+                return
+            }
+            var newIndex = currentIndex + direction
+            if newIndex < 0 { newIndex = completionSuggestions.count - 1 }
+            if newIndex >= completionSuggestions.count { newIndex = 0 }
+            selectedSuggestionId = completionSuggestions[newIndex].id
+
+            // Ensure the hosting controller's view gets updated with the new selection
+            completionViewHostingController?.rootView.selectedSuggestionId = selectedSuggestionId
+        }
+
+        func confirmCurrentSuggestion(in textView: NSTextView) {
+            if let selectedId = selectedSuggestionId, let suggestion = completionSuggestions.first(where: { $0.id == selectedId }) {
+                insertSuggestion(suggestion, in: textView)
+            }
+            hideCompletionView()
+        }
+
 
         // MARK: - Scroll Handling and Minimap Navigation
 

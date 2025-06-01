@@ -182,6 +182,12 @@ struct NotepadCloneApp: App {
                     Label("Delete", systemImage: "delete.left")
                 }
                 .keyboardShortcut(.delete)
+
+                Divider() // Optional: to separate from standard edit items
+                Button("Show Suggestions") {
+                    NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(ColumnarNSTextView.triggerAutoCompletionAction(_:)), with: nil)
+                }
+                .keyboardShortcut(" ", modifiers: .option) // Option + Space
             }
             
             // Search Menu
