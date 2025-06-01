@@ -4,14 +4,56 @@ import Combine // For auto-completion debouncing
 
 // Custom NSTextView subclass for Column Mode features
 class ColumnarNSTextView: NSTextView {
+    static let columnarTextPasteboardType = NSPasteboard.PasteboardType("com.example.NotepadClone2.columnarText")
     weak var columnCoordinator: CustomTextView.Coordinator?
+
+    // MARK: - Columnar Selection Properties
+    // Note: isOptionKeyDown is now directly managed by ColumnarNSTextView through flagsChanged
+    var isPerformingColumnSelection: Bool = false
+    var columnSelectionAnchorCharacterIndex: Int? // Character index at mousedown
+    var columnSelectionEndCharacterIndex: Int?   // Character index at current mouse position during drag
+
+    // The primary store for column selection. Each NSRange is for a line segment.
+    var columnSelectedTextRanges: [NSRange]? {
+        didSet {
+            if columnSelectedTextRanges != nil {
+                // When column selection is active, we might want to set
+                // the primary selection differently or suppress default selection drawing.
+                // For now, just mark that we need display update.
+                self.needsDisplay = true
+            } else {
+                isPerformingColumnSelection = false // Ensure this is reset if ranges are cleared
+                self.needsDisplay = true
+            }
+            // Update the AppState's isColumnModeActive based on the new selection state
+            if let coordinator = self.columnCoordinator {
+                 let isActive = columnSelectedTextRanges != nil && !(columnSelectedTextRanges?.isEmpty ?? true)
+                 if coordinator.appState.isColumnModeActive != isActive {
+                     DispatchQueue.main.async {
+                         coordinator.appState.isColumnModeActive = isActive
+                     }
+                 }
+            }
+        }
+    }
 
     override func flagsChanged(with event: NSEvent) {
         super.flagsChanged(with: event)
-        let isOptionNowDown = event.modifierFlags.contains(.option)
-        if columnCoordinator?.isOptionKeyDown != isOptionNowDown {
-            columnCoordinator?.isOptionKeyDown = isOptionNowDown
-            // print("TYPING_DEBUG: Option key is now \(isOptionNowDown ? "DOWN" : "UP")")
+        // Update isOptionKeyDown based on the event directly here,
+        // rather than relying on the coordinator to do it.
+        // This is important if we are initiating selection from ColumnarNSTextView.
+        let currentOptionState = event.modifierFlags.contains(.option)
+        if self.isOptionKeyDown != currentOptionState {
+            self.isOptionKeyDown = currentOptionState
+            // print("TYPING_DEBUG: Option key is now \(self.isOptionKeyDown ? "DOWN" : "UP") from ColumnarNSTextView.flagsChanged")
+        }
+
+        // If option key is released during a column selection, finalize it or clear it.
+        if !self.isOptionKeyDown && self.isPerformingColumnSelection {
+            // Decide whether to keep the selection or clear it.
+            // For now, let's clear it to simplify, similar to releasing the mouse button.
+            // A more advanced implementation might keep the selection.
+            // clearColumnSelection() // Or handle differently
         }
     }
 
@@ -19,177 +61,251 @@ class ColumnarNSTextView: NSTextView {
     override var acceptsFirstResponder: Bool { true }
 
     override func mouseDown(with event: NSEvent) {
-        if let coordinator = self.columnCoordinator, coordinator.isOptionKeyDown {
-            let locationInView = self.convert(event.locationInWindow, from: nil)
-            coordinator.columnSelectionAnchorPoint = locationInView
-            coordinator.currentColumnSelections = [] // Clear previous column selections
+       self.isOptionKeyDown = event.modifierFlags.contains(.option) // Check at the start of mouse down
+       if self.isOptionKeyDown {
+           self.isPerformingColumnSelection = true
+           // Clear previous column selection
+           self.columnSelectedTextRanges = nil
+           // Store the starting character index for the column selection
+           let startingPoint = self.convert(event.locationInWindow, from: nil)
+           self.columnSelectionAnchorCharacterIndex = self.characterIndexForInsertion(at: startingPoint)
 
-            // Calculate character index at the click point to set a single caret
-            // This uses the text view's own method, which expects points in the view's coordinate system.
-            let charIndexAtClick = self.characterIndexForInsertion(at: locationInView)
-            self.setSelectedRange(NSMakeRange(charIndexAtClick, 0))
-
-            // Do not call super, as we are initiating a custom selection behavior.
-            // self.needsDisplay = true // May be needed if we want to draw something immediately
-        } else {
-            // Normal mouse down, clear any column selection state
-            if !(self.columnCoordinator?.currentColumnSelections.isEmpty ?? true) {
-                 self.columnCoordinator?.currentColumnSelections = []
-                 self.needsDisplay = true // To clear any previous column selection drawing
-            }
-            self.columnCoordinator?.columnSelectionAnchorPoint = nil
-            super.mouseDown(with: event)
-        }
+           // Set a single caret at the mousedown location to provide immediate feedback
+           if let anchorIndex = self.columnSelectionAnchorCharacterIndex {
+               self.setSelectedRange(NSRange(location: anchorIndex, length: 0))
+           }
+           // Prevent normal text selection from starting by not calling super
+       } else {
+           self.isPerformingColumnSelection = false
+           self.columnSelectedTextRanges = nil // Clear any existing column selection
+           super.mouseDown(with: event) // Default behavior
+       }
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let coordinator = self.columnCoordinator,
-              coordinator.isOptionKeyDown,
-              let anchorPoint = coordinator.columnSelectionAnchorPoint,
-              let layoutManager = self.layoutManager,
-              let textContainer = self.textContainer,
-              let textStorage = self.textStorage else {
-            // If not in column selection mode, or if essential components are missing,
-            // call super and clear any column selection remnants.
-            if !(self.columnCoordinator?.currentColumnSelections.isEmpty ?? true) {
-                 self.columnCoordinator?.currentColumnSelections = []
-                 self.needsDisplay = true
-            }
-            super.mouseDragged(with: event)
-            return
-        }
+       if self.isPerformingColumnSelection, let layoutMgr = self.layoutManager, let textContainer = self.textContainer {
+           guard let startCharIndex = self.columnSelectionAnchorCharacterIndex else { return }
 
-        let currentLocationInView = self.convert(event.locationInWindow, from: nil)
-        var newSelections: [NSRange] = []
+           let currentPoint = self.convert(event.locationInWindow, from: nil)
+           let currentCharIndex = self.characterIndexForInsertion(at: currentPoint)
+           self.columnSelectionEndCharacterIndex = currentCharIndex
 
-        let selectionRect = NSRect(
-            x: min(anchorPoint.x, currentLocationInView.x),
-            y: min(anchorPoint.y, currentLocationInView.y),
-            width: abs(anchorPoint.x - currentLocationInView.x),
-            height: abs(anchorPoint.y - currentLocationInView.y)
-        )
+           // Determine the visual start and end points of the drag for rectangle calculation
+           // We use characterIndexForInsertion to find the character index first, then get its bounding box.
+           // This helps ensure the start/end points are valid insertion points.
+           let startGlyphIndex = layoutMgr.glyphIndexForCharacter(at: startCharIndex)
+           let currentGlyphIndex = layoutMgr.glyphIndexForCharacter(at: currentCharIndex)
 
-        // Iterate through line fragments that intersect the selection rectangle's Y-span.
-        // The glyphRangeForBoundingRect method helps find relevant glyphs.
-        // Note: self.visibleRect might not be the full bounds of the selectionRect if dragging outside.
-        // A broader rect, like self.bounds, or iterating all line fragments might be safer.
-        // For simplicity, let's iterate all lines and check intersection.
+           let startPointCoords = layoutMgr.boundingRect(forGlyphRange: NSRange(location: startGlyphIndex, length: 0), in: textContainer).origin
+           let endPointCoords = layoutMgr.boundingRect(forGlyphRange: NSRange(location: currentGlyphIndex, length: 0), in: textContainer).origin
 
-        var charIndex = 0
-        while charIndex < textStorage.length {
-            var lineGlyphNSRange = NSRange() // Effective range of glyphs for the line fragment
-            // Get the rectangle for the current line fragment in container coordinates
-            let lineFragmentRect = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.glyphIndexForCharacter(at: charIndex), effectiveRange: &lineGlyphNSRange)
-            let lineCharRange = layoutManager.characterRange(forGlyphRange: lineGlyphNSRange, actualGlyphRange: nil)
+           let columnRect = NSRect(
+               x: min(startPointCoords.x, endPointCoords.x),
+               y: min(startPointCoords.y, endPointCoords.y), // Y might be less intuitive if dragging up/down across lines
+               width: abs(startPointCoords.x - endPointCoords.x),
+               height: abs(startPointCoords.y - endPointCoords.y) + layoutMgr.defaultLineHeight(for: NSFont.systemFont(ofSize: 14)) // Add line height to ensure full line coverage
+           )
 
-            // Convert lineFragmentRect to view coordinates for intersection test with selectionRect (which is in view coords)
-            let lineFragmentRectInView = self.convert(lineFragmentRect, from: nil) // Assuming textContainerOrigin is (0,0) or handled by convert
-                                                                                // More robust: convert from textContainer's coordinate system if it has an origin.
+           var newRanges: [NSRange] = []
+           let textNSString = self.string as NSString
 
-            if selectionRect.intersects(lineFragmentRectInView) {
-                // Points for characterIndexForInsertion are in view coordinates.
-                let pointStartInView = NSPoint(x: selectionRect.minX, y: lineFragmentRectInView.midY)
-                let pointEndInView = NSPoint(x: selectionRect.maxX, y: lineFragmentRectInView.midY)
+           var lineCharIdx = 0
+           while lineCharIdx < textNSString.length {
+               let currentLineRange = textNSString.lineRange(for: NSRange(location: lineCharIdx, length: 0))
+               let lineGlyphRange = layoutMgr.glyphRange(forCharacterRange: currentLineRange, actualCharacterRange: nil)
+               let lineBoundingRect = layoutMgr.boundingRect(forGlyphRange: lineGlyphRange, in: textContainer)
 
-                var lineStartIndex = self.characterIndexForInsertion(at: pointStartInView)
-                var lineEndIndex = self.characterIndexForInsertion(at: pointEndInView)
+               // Check if the line's Y range intersects with the columnRect's Y range
+               if max(columnRect.minY, lineBoundingRect.minY) < min(columnRect.maxY, lineBoundingRect.maxY) {
+                   // Determine start column character index for the current line
+                   let startXPointInLine = NSPoint(x: columnRect.minX, y: lineBoundingRect.midY)
+                   var selectionStartOnLine = layoutMgr.characterIndex(for: startXPointInLine, in: textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
+                   selectionStartOnLine = max(currentLineRange.location, min(selectionStartOnLine, NSMaxRange(currentLineRange)))
 
-                // Clamp indices to the current line's character range
-                lineStartIndex = max(lineCharRange.location, min(lineStartIndex, NSMaxRange(lineCharRange)))
-                lineEndIndex = max(lineCharRange.location, min(lineEndIndex, NSMaxRange(lineCharRange)))
 
-                if lineStartIndex > lineEndIndex { // Correct if selection was right-to-left on this line
-                    swap(&lineStartIndex, &lineEndIndex)
-                }
+                   // Determine end column character index for the current line
+                   let endXPointInLine = NSPoint(x: columnRect.maxX, y: lineBoundingRect.midY)
+                   var selectionEndOnLine = layoutMgr.characterIndex(for: endXPointInLine, in: textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
+                   selectionEndOnLine = max(currentLineRange.location, min(selectionEndOnLine, NSMaxRange(currentLineRange)))
 
-                // Add selection for this line
-                // Allow zero-length selection if the rectangle width is very small (effectively a vertical line drag)
-                if lineStartIndex < lineEndIndex || (selectionRect.width < 1.0 && lineStartIndex == lineEndIndex) {
-                     newSelections.append(NSMakeRange(lineStartIndex, lineEndIndex - lineStartIndex))
-                } else if lineStartIndex == lineEndIndex && selectionRect.width >= 1.0 { // if rect has width but maps to same char, select that char or make it caret
-                     newSelections.append(NSMakeRange(lineStartIndex, 0)) // Make it a caret if indices are same but width exists
-                }
-            }
+                   let finalStart = min(selectionStartOnLine, selectionEndOnLine)
+                   let finalEnd = max(selectionStartOnLine, selectionEndOnLine)
 
-            if NSMaxRange(lineCharRange) >= textStorage.length {
-                break // End of text
-            }
-            charIndex = NSMaxRange(lineCharRange)
-        }
+                   if finalStart <= finalEnd {
+                        newRanges.append(NSRange(location: finalStart, length: finalEnd - finalStart))
+                   }
+               }
+               if NSMaxRange(currentLineRange) >= textNSString.length { break }
+               lineCharIdx = NSMaxRange(currentLineRange)
+           }
+           self.columnSelectedTextRanges = newRanges.isEmpty ? nil : newRanges
+           self.setSelectedRange(NSMakeRange(currentCharIndex, 0)) // Keep a primary caret at current drag location
+           self.setNeedsDisplay(self.bounds, avoidAdditionalLayout: false)
 
-        coordinator.currentColumnSelections = newSelections
-        // Clear NSTextView's own selection to avoid conflict
-        self.setSelectedRange(NSMakeRange(self.selectedRange().location, 0)) // Keep a primary caret, or clear fully
-        self.needsDisplay = true // Trigger redraw for our custom selection drawing
-        // Do not call super.mouseDragged to prevent normal text selection.
+       } else {
+           super.mouseDragged(with: event)
+       }
     }
 
     override func mouseUp(with event: NSEvent) {
-        if let coordinator = self.columnCoordinator, coordinator.isOptionKeyDown, coordinator.columnSelectionAnchorPoint != nil {
-            // Finalize column selection
-            coordinator.columnSelectionAnchorPoint = nil
-            // currentColumnSelections already holds the final set from the last mouseDragged
+       if self.isPerformingColumnSelection {
+           // Finalize column selection. `columnSelectedTextRanges` is already set.
+           if self.columnSelectedTextRanges == nil || self.columnSelectedTextRanges?.isEmpty == true {
+               self.columnSelectedTextRanges = nil // Ensure it's nil if empty
+               // Restore a normal cursor at the mouse up position
+               let clickPoint = self.convert(event.locationInWindow, from: nil)
+               let charIndex = self.characterIndexForInsertion(at: clickPoint)
+               self.setSelectedRange(NSRange(location: charIndex, length: 0))
+           } else {
+                // Successfully created a column selection.
+                // The main selectedRange could be set to the first range, or the range containing the endCharIndex.
+                if let endIdx = self.columnSelectionEndCharacterIndex,
+                   let containingRange = self.columnSelectedTextRanges?.first(where: { NSLocationInRange(endIdx, $0) || $0.location == endIdx }) {
+                    self.setSelectedRange(containingRange)
+                } else if let firstRange = self.columnSelectedTextRanges?.first {
+                    self.setSelectedRange(firstRange)
+                }
+           }
+           // self.isPerformingColumnSelection remains true until Option key is up or new selection starts
+           // Reset isOptionKeyDown because the mouse gesture has ended.
+           // The isPerformingColumnSelection flag will be fully reset if Option key is released or new non-option click.
+       } else {
+           super.mouseUp(with: event)
+       }
+       // isOptionKeyDown should reflect the current actual key state after the event.
+       // However, for the logic of a single drag, it might be better to clear it here
+       // or ensure flagsChanged handles the reset of isPerformingColumnSelection if Option is released.
+       // For now, let flagsChanged handle isOptionKeyDown state for subsequent events.
+       // self.isOptionKeyDown = false; // This was in the prompt, but might be better handled by flagsChanged
+    }
 
-            // Optional: Post notification if other UI parts need to know about the new column selection
-            // NotificationCenter.default.post(name: .columnSelectionDidChange, object: self)
+    // Add a helper to clear column selection state if needed
+    func clearColumnSelection() {
+        self.isPerformingColumnSelection = false
+        self.columnSelectedTextRanges = nil
+        // self.isOptionKeyDown = false; // isOptionKeyDown is managed by flagsChanged
+        self.needsDisplay = true
+    }
 
-            self.needsDisplay = true // Ensure final selection is drawn
-            // Do not call super, as we handled this event.
-        } else {
-            super.mouseUp(with: event)
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        if isPerformingColumnSelection, let currentRanges = columnSelectedTextRanges, !currentRanges.isEmpty, let ts = self.textStorage {
+            guard let textToInsert = string as? String else {
+                super.insertText(string, replacementRange: replacementRange)
+                return
+            }
+
+            ts.beginEditing()
+            var newCarets: [NSRange] = []
+            let textNSString = ts.string as NSString
+
+            // Determine the target visual column for padding.
+            // This could be based on the columnSelectionAnchorCharacterIndex's line position,
+            // or the maximum desired starting column among selections.
+            // For simplicity, let's use the character index of each selection range's start
+            // as the desired minimum column for that line.
+
+            var accumulatedOffset = 0 // Tracks changes in length from previous insertions for current iteration
+
+            for var currentRange in currentRanges.sorted(by: { $0.location > $1.location }) {
+                // Adjust currentRange based on previous changes in this loop iteration
+                // This is complex because sorted ranges are by original location.
+                // A better way is to apply changes and rebuild the ranges array, or adjust offsets carefully.
+                // For now, this simplified approach will have issues if textToInsert.count > 1 on multiple lines.
+                // Let's assume textToInsert is usually a single character for typing.
+
+                let lineRange = textNSString.lineRange(for: NSMakeRange(currentRange.location, 0))
+                let actualLineEndCharIndex = NSMaxRange(lineRange) - (textNSString.substring(with: lineRange).hasSuffix("\n") ? 1 : 0)
+                                     - (textNSString.substring(with: lineRange).hasSuffix("\r\n") ? 1 : 0)
+
+
+                var spacesToInsert = ""
+                if currentRange.location > actualLineEndCharIndex { // Caret is beyond the actual characters on the line
+                    let paddingNeeded = currentRange.location - actualLineEndCharIndex
+                    if paddingNeeded > 0 {
+                        spacesToInsert = String(repeating: " ", count: paddingNeeded)
+                    }
+                }
+
+                // The range where text/padding will actually be inserted/replaced.
+                // If padding is needed, it's at actualLineEndCharIndex. Otherwise, it's at currentRange.location.
+                let insertionPoint = spacesToInsert.isEmpty ? currentRange.location : actualLineEndCharIndex
+                let effectiveReplacementLength = spacesToInsert.isEmpty ? currentRange.length : 0
+                                                // If padding, we are inserting, not replacing existing selection part with spaces.
+                                                // Any selected text in the column beyond actual line end is "virtual".
+
+                let textToActuallyInsert = spacesToInsert + textToInsert
+
+                let currentRangeToReplace = NSMakeRange(insertionPoint, effectiveReplacementLength)
+
+                // Validate range before replacement
+                let validLocation = max(0, min(currentRangeToReplace.location, ts.length))
+                let validLength = max(0, min(currentRangeToReplace.length, ts.length - validLocation))
+                let finalRangeToReplace = NSMakeRange(validLocation, validLength)
+
+                ts.replaceCharacters(in: finalRangeToReplace, with: textToActuallyInsert)
+                newCarets.append(NSMakeRange(finalRangeToReplace.location + (textToActuallyInsert as NSString).length, 0))
+            }
+            ts.endEditing()
+            self.columnSelectedTextRanges = newCarets.isEmpty ? nil : newCarets.sorted(by: { $0.location < $1.location })
+            self.needsDisplay = true
+            // Let the textDidChange notification handle further updates.
+            // Do not call super.insertText if we handled it.
+            return
         }
+        super.insertText(string, replacementRange: replacementRange)
     }
 
     override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn: Bool) {
-        guard turnedOn, let coordinator = self.columnCoordinator, !coordinator.currentColumnSelections.isEmpty else {
-            super.drawInsertionPoint(in: rect, color: color, turnedOn: turnedOn)
-            return
+        // If column selection is active, draw multiple carets for zero-length ranges
+        if isPerformingColumnSelection, let ranges = self.columnSelectedTextRanges, turnedOn {
+            let caretColor = self.insertionPointColor
+            caretColor.set()
+
+            for range in ranges where range.length == 0 { // Only draw for zero-length ranges (carets)
+                 if let layoutMgr = self.layoutManager, let textContainer = self.textContainer {
+                    // Ensure location is valid
+                    let charIdx = max(0, min(range.location, self.string.count))
+                    let glyphIndex = layoutMgr.glyphIndexForCharacter(at: charIdx)
+
+                    // Get rect for the insertion point.
+                    // Using lineFragmentRect to get Y and height, and boundingRect for X.
+                    var effectiveRange = NSRange()
+                    let lineFragRect = layoutMgr.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &effectiveRange)
+                    var insertionPointRect = layoutMgr.boundingRect(forGlyphRange: NSMakeRange(glyphIndex,0), in: textContainer)
+
+                    insertionPointRect.origin.x += self.textContainerOrigin.x
+                    // Use lineFragmentRect's Y for caret Y to ensure it's aligned with the line.
+                    insertionPointRect.origin.y = lineFragRect.origin.y + self.textContainerOrigin.y
+                    insertionPointRect.size.width = 1.0 // Caret width
+                    insertionPointRect.size.height = lineFragRect.height // Caret height as line height
+
+                    insertionPointRect.fill()
+                }
+            }
+            // If we drew custom carets, or if there are non-caret selections, don't draw the default one.
+            if !ranges.isEmpty { return }
         }
-
-        guard let layoutManager = self.layoutManager, let textContainer = self.textContainer else {
-            super.drawInsertionPoint(in: rect, color: color, turnedOn: turnedOn) // Fallback
-            return
-        }
-
-        for range in coordinator.currentColumnSelections where range.length == 0 {
-            // This is a caret position
-            // Ensure location is valid before getting glyphIndex
-            guard range.location < (textStorage?.length ?? 0) || (range.location == 0 && (textStorage?.length ?? 0) == 0) else { continue }
-
-            let glyphIndex = layoutManager.glyphIndexForCharacter(at: range.location)
-
-            var effectiveRange = NSRange()
-            let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &effectiveRange)
-
-            // boundingRect for a zero-length range at a glyph index gives the insertion point rect
-            let insertionPointGlyphRange = NSMakeRange(glyphIndex, 0)
-            let insertionPointRect = layoutManager.boundingRect(forGlyphRange: insertionPointGlyphRange, in: textContainer)
-
-            let caretX = insertionPointRect.minX + self.textContainerOrigin.x
-            let caretY = lineRect.minY + self.textContainerOrigin.y
-
-            let caretRect = NSRect(x: caretX, y: caretY, width: 1.0, height: lineRect.height)
-
-            color.set()
-            caretRect.fill()
-        }
-        // If we drew custom carets, do not call super.
+        // Default behavior if not in column selection or if column selection has no carets.
+        super.drawInsertionPoint(in: rect, color: color, turnedOn: turnedOn)
     }
 
     override func drawBackground(in clipRect: NSRect) {
         super.drawBackground(in: clipRect) // Draw default background first
 
-        guard let coordinator = self.columnCoordinator,
-              !coordinator.currentColumnSelections.isEmpty,
-              let layoutManager = self.layoutManager,
-              let textContainer = self.textContainer else {
-            return
-        }
+        // If column selection is active and we have ranges, draw them
+        if isPerformingColumnSelection, let ranges = self.columnSelectedTextRanges,
+           let layoutMgr = self.layoutManager, let textContainer = self.textContainer {
 
-        let selectionColor = NSColor.selectedTextBackgroundColor.withAlphaComponent(0.3)
-        selectionColor.set()
+            var selectionColor: NSColor
+            if let bgColor = self.selectedTextAttributes[.backgroundColor] as? NSColor {
+                selectionColor = bgColor
+            } else {
+                selectionColor = NSColor.selectedTextBackgroundColor
+            }
+            // Apply transparency to the chosen color
+            selectionColor.withAlphaComponent(0.3).set()
 
-        for range in coordinator.currentColumnSelections where range.length > 0 {
+            for range in ranges where range.length > 0 { // Only draw for ranges with actual length
             guard range.location + range.length <= (textStorage?.length ?? 0) else { continue } // Bounds check
 
             // Get glyph range, handling potential errors if character range is invalid.
@@ -220,139 +336,189 @@ class ColumnarNSTextView: NSTextView {
     }
 
     override func deleteBackward(_ sender: Any?) {
-        guard let coordinator = self.columnCoordinator,
-              !coordinator.currentColumnSelections.isEmpty,
-              let textStorage = self.textStorage else {
-            super.deleteBackward(sender)
-            return
-        }
-
-        textStorage.beginEditing()
-        var newSelections: [NSRange] = []
-        // Iterate in reverse order of location for deleteBackward
-        for range in coordinator.currentColumnSelections.sorted(by: { $0.location > $1.location }) {
-            var rangeToDelete = range
-            if range.length == 0 { // Caret, delete character before
-                if range.location > 0 {
-                    rangeToDelete = NSMakeRange(range.location - 1, 1)
+        if isPerformingColumnSelection, let ranges = columnSelectedTextRanges, !ranges.isEmpty, let ts = self.textStorage {
+            ts.beginEditing()
+            var newCarets: [NSRange] = []
+            // Iterate in reverse to maintain correct indices during modification
+            ranges.sorted(by: { $0.location > $1.location }).forEach { range in
+                var rangeToDelete = range
+                if range.length == 0 { // Caret
+                    if range.location > 0 { rangeToDelete = NSMakeRange(range.location - 1, 1) }
+                    else {
+                        newCarets.append(range) // Keep caret at beginning if nothing to delete
+                        return
+                    }
+                }
+                // Ensure rangeToDelete is valid before replacing
+                if rangeToDelete.location < ts.length || (rangeToDelete.location == ts.length && rangeToDelete.length == 0) {
+                     let actualLength = min(rangeToDelete.length, ts.length - rangeToDelete.location)
+                     let validRangeToDelete = NSMakeRange(rangeToDelete.location, actualLength)
+                     if validRangeToDelete.length > 0 || (range.length == 0 && range.location > 0) { // Ensure something is actually deleted for caret case
+                        ts.replaceCharacters(in: validRangeToDelete, with: "")
+                        newCarets.append(NSMakeRange(validRangeToDelete.location, 0))
+                     } else {
+                        newCarets.append(NSMakeRange(rangeToDelete.location,0)) // If nothing deleted, keep caret
+                     }
                 } else {
-                    newSelections.append(range) // Keep caret as is
-                    continue
+                     newCarets.append(NSMakeRange(ts.length,0)) // If range is somehow out of bounds, move caret to end
                 }
             }
-
-            let currentTextLength = textStorage.length
-            guard rangeToDelete.location < currentTextLength else {
-                newSelections.append(NSMakeRange(min(range.location, currentTextLength),0))
-                continue
-            }
-            let validLength = min(rangeToDelete.length, currentTextLength - rangeToDelete.location)
-            let actualRangeToDelete = NSMakeRange(rangeToDelete.location, validLength)
-
-            if actualRangeToDelete.length > 0 || (range.length == 0 && range.location > 0) {
-                 textStorage.replaceCharacters(in: actualRangeToDelete, with: "")
-                 newSelections.append(NSMakeRange(actualRangeToDelete.location, 0))
-            } else {
-                 newSelections.append(range)
-            }
+            ts.endEditing()
+            // Update column selection to new caret positions
+            self.columnSelectedTextRanges = newCarets.isEmpty ? nil : newCarets.sorted(by: { $0.location < $1.location })
+            self.needsDisplay = true // Redraw to reflect changes
+            return
         }
-        coordinator.currentColumnSelections = newSelections.sorted(by: { $0.location < $1.location })
-        textStorage.endEditing()
-        self.needsDisplay = true
+        // Fallback to super if not performing column selection with new system
+        // The old coordinator-based logic is now removed.
+        super.deleteBackward(sender)
     }
 
     override func deleteForward(_ sender: Any?) {
-        guard let coordinator = self.columnCoordinator,
-              !coordinator.currentColumnSelections.isEmpty,
-              let textStorage = self.textStorage else {
-            super.deleteForward(sender)
-            return
-        }
-
-        textStorage.beginEditing()
-        var newSelections: [NSRange] = []
-        for range in coordinator.currentColumnSelections.sorted(by: { $0.location > $1.location }) {
-            var rangeToDelete = range
-            if range.length == 0 { // Caret, delete character after
-                if range.location < textStorage.length { // Check if not at the very end
-                    rangeToDelete = NSMakeRange(range.location, 1)
+        if isPerformingColumnSelection, let ranges = columnSelectedTextRanges, !ranges.isEmpty, let ts = self.textStorage {
+            ts.beginEditing()
+            var newCarets: [NSRange] = []
+            ranges.sorted(by: { $0.location > $1.location }).forEach { range in
+                var rangeToDelete = range
+                if range.length == 0 { // Caret
+                    if range.location < ts.length { rangeToDelete = NSMakeRange(range.location, 1) }
+                    else {
+                        newCarets.append(range) // Keep caret at end if nothing to delete
+                        return
+                    }
+                }
+                // Ensure rangeToDelete is valid before replacing
+                if rangeToDelete.location < ts.length {
+                     let actualLength = min(rangeToDelete.length, ts.length - rangeToDelete.location)
+                     let validRangeToDelete = NSMakeRange(rangeToDelete.location, actualLength)
+                     if validRangeToDelete.length > 0 {
+                         ts.replaceCharacters(in: validRangeToDelete, with: "")
+                         newCarets.append(NSMakeRange(validRangeToDelete.location, 0)) // Caret stays at original location
+                     } else {
+                         newCarets.append(NSMakeRange(range.location, 0)) // If nothing deleted, keep caret
+                     }
                 } else {
-                    newSelections.append(range)
-                    continue
+                     newCarets.append(NSMakeRange(ts.length, 0)) // If range is somehow out of bounds, move caret to end
                 }
             }
-
-            let currentTextLength = textStorage.length
-            guard rangeToDelete.location < currentTextLength else {
-                 newSelections.append(NSMakeRange(min(range.location, currentTextLength),0))
-                 continue
-            }
-            let validLength = min(rangeToDelete.length, currentTextLength - rangeToDelete.location)
-            let actualRangeToDelete = NSMakeRange(rangeToDelete.location, validLength)
-
-            if actualRangeToDelete.length > 0 {
-                textStorage.replaceCharacters(in: actualRangeToDelete, with: "")
-                newSelections.append(NSMakeRange(actualRangeToDelete.location, 0))
-            } else {
-                newSelections.append(range)
-            }
+            ts.endEditing()
+            self.columnSelectedTextRanges = newCarets.isEmpty ? nil : newCarets.sorted(by: { $0.location < $1.location })
+            self.needsDisplay = true
+            return
         }
-        coordinator.currentColumnSelections = newSelections.sorted(by: { $0.location < $1.location })
-        textStorage.endEditing()
-        self.needsDisplay = true
+        // Fallback to super if not performing column selection with new system
+        // The old coordinator-based logic is now removed.
+        super.deleteForward(sender)
     }
 
     override func copy(_ sender: Any?) {
-        guard let coordinator = self.columnCoordinator,
-              !coordinator.currentColumnSelections.isEmpty,
-              let textStorage = self.textStorage else {
-            super.copy(sender) // Fallback to default copy behavior
+        if isPerformingColumnSelection, let ranges = columnSelectedTextRanges, !ranges.isEmpty, let ts = self.textStorage {
+            let strings = ranges.map { range -> String in
+                // Ensure range is valid before attempting to substring
+                let validLocation = max(0, min(range.location, ts.length))
+                let validLength = max(0, min(range.length, ts.length - validLocation))
+                let validRange = NSMakeRange(validLocation, validLength)
+                if validRange.length > 0 || (range.length == 0 && validLocation <= ts.length) { // Allow empty string for carets
+                    return (ts.string as NSString).substring(with: validRange)
+                }
+                return "" // Return empty string for invalid or truly empty ranges if not carets
+            }
+            let strings = ranges.map { range -> String in
+                let validLocation = max(0, min(range.location, ts.length))
+                let validLength = max(0, min(range.length, ts.length - validLocation))
+                let validRange = NSMakeRange(validLocation, validLength)
+                if validRange.length > 0 || (range.length == 0 && validLocation <= ts.length) {
+                    return (ts.string as NSString).substring(with: validRange)
+                }
+                return ""
+            }
+            let finalTextToCopy = strings.joined(separator: "\n")
+
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.declareTypes([.string, ColumnarNSTextView.columnarTextPasteboardType], owner: nil)
+            pasteboard.setString(finalTextToCopy, forType: .string)
+            // For the custom type, we can just set the same string, or a special marker/data if needed later.
+            // Setting the same string for simplicity now.
+            pasteboard.setString(finalTextToCopy, forType: ColumnarNSTextView.columnarTextPasteboardType)
             return
         }
-
-        var linesToCopy: [String] = []
-        for range in coordinator.currentColumnSelections { // Assumes currentColumnSelections is already sorted by location
-            if range.length > 0 {
-                 if range.location <= textStorage.length && NSMaxRange(range) <= textStorage.length {
-                    linesToCopy.append((textStorage.string as NSString).substring(with: range))
-                 } else {
-                    linesToCopy.append("") // Invalid range for this line
-                 }
-            } else {
-                // For a caret, copy an empty string for that line.
-                linesToCopy.append("")
-            }
-        }
-
-        let finalTextToCopy = linesToCopy.joined(separator: "\n")
-
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(finalTextToCopy, forType: .string)
-
-        print("TYPING_DEBUG: Column copy performed. Copied text: \"\(finalTextToCopy.replacingOccurrences(of: "\n", with: "\\n"))\"")
-        // Do not call super.copy(sender) as we have handled the copy operation.
+        super.copy(sender)
     }
 
     override func paste(_ sender: Any?) {
-        guard let coordinator = self.columnCoordinator,
-              !coordinator.currentColumnSelections.isEmpty,
-              let textStorage = self.textStorage,
-              let pastedString = NSPasteboard.general.string(forType: .string) else {
-            super.paste(sender) // Fallback to default paste behavior
+        if isPerformingColumnSelection, let currentRanges = columnSelectedTextRanges, !currentRanges.isEmpty, let ts = self.textStorage {
+            let pasteboard = NSPasteboard.general
+            var pastedText: String? = nil
+            var isColumnarData = false
+
+            // Prioritize custom columnar type
+            if let types = pasteboard.types, types.contains(ColumnarNSTextView.columnarTextPasteboardType) {
+                pastedText = pasteboard.string(forType: ColumnarNSTextView.columnarTextPasteboardType)
+                isColumnarData = true // Assume it's columnar if this type is present, even if string is same
+                                      // For more robust check, custom type could store metadata.
+            } else {
+                pastedText = pasteboard.string(forType: .string)
+            }
+
+            guard let textToPaste = pastedText else {
+                super.paste(sender)
+                return
+            }
+
+            ts.beginEditing()
+            var newCarets: [NSRange] = []
+            let linesFromPasteboard = textToPaste.components(separatedBy: "\n")
+
+            // Sort ranges from bottom to top (reverse by location) to preserve validity during modification
+            let sortedRanges = currentRanges.sorted(by: { $0.location > $1.location })
+
+            if linesFromPasteboard.count == 1 || !isColumnarData { // Single line from pasteboard OR standard (non-columnar) paste
+                let singleLineToPaste = linesFromPasteboard.first ?? "" // Use first line, or full string if no newlines
+                for range in sortedRanges {
+                    let validLocation = max(0, min(range.location, ts.length))
+                    let validLength = max(0, min(range.length, ts.length - validLocation))
+                    let currentRangeToReplace = NSMakeRange(validLocation, validLength)
+
+                    ts.replaceCharacters(in: currentRangeToReplace, with: singleLineToPaste)
+                    newCarets.append(NSMakeRange(currentRangeToReplace.location + (singleLineToPaste as NSString).length, 0))
+                }
+            } else { // Multi-line columnar data from pasteboard AND multiple selection ranges
+                if linesFromPasteboard.count == sortedRanges.count {
+                    // Number of lines matches number of selections, paste line by line
+                    for (index, range) in sortedRanges.enumerated() {
+                        // Since sortedRanges is reversed, map linesFromPasteboard from its end
+                        let pasteLine = linesFromPasteboard[linesFromPasteboard.count - 1 - index]
+
+                        let validLocation = max(0, min(range.location, ts.length))
+                        let validLength = max(0, min(range.length, ts.length - validLocation))
+                        let currentRangeToReplace = NSMakeRange(validLocation, validLength)
+
+                        ts.replaceCharacters(in: currentRangeToReplace, with: pasteLine)
+                        newCarets.append(NSMakeRange(currentRangeToReplace.location + (pasteLine as NSString).length, 0))
+                    }
+                } else {
+                    // Mismatched line counts: paste the ENTIRE multi-line string at each selection point
+                    for range in sortedRanges {
+                        let validLocation = max(0, min(range.location, ts.length))
+                        let validLength = max(0, min(range.length, ts.length - validLocation))
+                        let currentRangeToReplace = NSMakeRange(validLocation, validLength)
+
+                        ts.replaceCharacters(in: currentRangeToReplace, with: textToPaste) // textToPaste is the full multi-line string
+                        newCarets.append(NSMakeRange(currentRangeToReplace.location + (textToPaste as NSString).length, 0))
+                    }
+                }
+            }
+
+            ts.endEditing()
+            self.columnSelectedTextRanges = newCarets.isEmpty ? nil : newCarets.sorted(by: { $0.location < $1.location })
+            self.needsDisplay = true
             return
         }
+        super.paste(sender: sender)
+    }
 
-        let linesToPaste = pastedString.components(separatedBy: .newlines)
-
-        textStorage.beginEditing()
-        var newCaretPositions: [NSRange] = []
-
-        let selectionsToProcess = coordinator.currentColumnSelections.sorted(by: { $0.location > $1.location })
-
-        for i in 0..<selectionsToProcess.count {
-            let rangeToReplace = selectionsToProcess[i]
-            let originalSelectionOrderIndex = coordinator.currentColumnSelections.count - 1 - i
+    // Override keyDown to handle auto-completion navigation
 
             var stringForThisCaret: String
             if linesToPaste.count == 1 {
@@ -403,25 +569,54 @@ class ColumnarNSTextView: NSTextView {
 
     // Override keyDown to handle auto-completion navigation
     override func keyDown(with event: NSEvent) {
+        if isPerformingColumnSelection {
+            // Check for Escape key first
+            if event.keyCode == 53 { // Escape Key
+                // Try to restore selection to where column mode started, or first selection
+                let caretToRestore = columnSelectionAnchorCharacterIndex ?? columnSelectedTextRanges?.first?.location ?? selectedRange().location
+                clearColumnSelection()
+                setSelectedRange(NSRange(location: caretToRestore, length: 0))
+                // print("Column mode cancelled by Escape. Caret restored to \(caretToRestore)")
+                return // Event handled
+            }
+            // Check for Arrow keys
+            // 123: Left, 124: Right, 125: Down, 126: Up
+            if event.keyCode >= 123 && event.keyCode <= 126 {
+                 // Determine a primary caret position to restore to before clearing column mode.
+                 // This could be the anchor, or the start/end of the first/last range.
+                 // Using columnSelectionAnchorCharacterIndex is a good candidate.
+                let caretToRestore = columnSelectionAnchorCharacterIndex ?? columnSelectedTextRanges?.first?.location ?? selectedRange().location
+                clearColumnSelection()
+                setSelectedRange(NSRange(location: caretToRestore, length: 0))
+                // print("Column mode cancelled by Arrow key. Caret restored to \(caretToRestore)")
+                // Do NOT call super.keyDown. Let the system handle the arrow key in the next event cycle
+                // on the now normal (single) selection. This avoids double-processing the arrow key.
+                // The user will press arrow again if they want to navigate from this new caret.
+                // Alternatively, to make it move on the first press:
+                // super.keyDown(with: event) // after clearing mode and setting cursor
+                return // Event handled by cancelling column mode
+            }
+        }
+
         if let coordinator = self.columnCoordinator, coordinator.isCompletionViewPresented {
             switch event.keyCode {
-            case 126: // Up Arrow
+            case 126: // Up Arrow (Completion List Navigation)
                 coordinator.navigateCompletionList(direction: -1)
-                return // Event handled
-            case 125: // Down Arrow
+                return
+            case 125: // Down Arrow (Completion List Navigation)
                 coordinator.navigateCompletionList(direction: 1)
-                return // Event handled
-            case 36:  // Enter
+                return
+            case 36:  // Enter (Completion List Confirmation)
                 coordinator.confirmCurrentSuggestion(in: self)
-                return // Event handled
-            case 48: // Tab
+                return
+            case 48: // Tab (Completion List Confirmation)
                  coordinator.confirmCurrentSuggestion(in: self)
-                 return // Event handled
-            case 53:  // Escape
+                 return
+            case 53:  // Escape (Completion List Dismissal)
                 coordinator.hideCompletionView()
-                return // Event handled
+                return
             default:
-                break // Let super handle other keys
+                break
             }
         }
         super.keyDown(with: event)
@@ -683,21 +878,6 @@ struct CustomTextView: NSViewRepresentable {
         @Published var selectedRange: NSRange = NSRange(location: 0, length: 0)
         var foldableRegions: [FoldableRegion] = []
 
-        // New properties for Column Mode:
-        var isOptionKeyDown: Bool = false
-        var columnSelectionAnchorPoint: NSPoint? // Starting point of a column drag in view coordinates
-        var currentColumnSelections: [NSRange] = [] { // Holds NSRange for each line in column selection
-            didSet {
-                let isActive = !currentColumnSelections.isEmpty
-                if appState.isColumnModeActive != isActive {
-                    DispatchQueue.main.async {
-                        self.appState.isColumnModeActive = isActive
-                        // print("TYPING_DEBUG: isColumnModeActive set to \(isActive)")
-                    }
-                }
-            }
-        }
-
         // MARK: - Auto-Completion Properties
         let autoCompletionManager: AutoCompletionManager
         var completionSuggestions: [CompletionSuggestion] = []
@@ -784,7 +964,7 @@ struct CustomTextView: NSViewRepresentable {
             print("TYPING_DEBUG: ✏️ Coordinator.textDidChange - Called. isUpdating: \(isUpdating)")
 
             // Auto-completion logic
-            if let textView = notification.object as? NSTextView {
+            if let textView = notification.object as? ColumnarNSTextView { // Ensure it's our type
                 // Debounce text changes for auto-completion
                 // Cancel any previous debounce subscription
                 textChangeDebounceCancellable?.cancel()
@@ -792,11 +972,15 @@ struct CustomTextView: NSViewRepresentable {
                     .debounce(for: .milliseconds(300), scheduler: RunLoop.main) // 300ms debounce
                     .sink { [weak self] currentTextContent in
                         self?.triggerAutoCompletion(for: textView, textContent: currentTextContent)
+                        // If text changed, clear column selection (new system)
+                        // This ensures that programmatic text changes or normal typing
+                        // while a column selection highlight might be visible, clears that visual state.
+                        textView.clearColumnSelection()
                     }
             }
 
-            guard let textView = notification.object as? NSTextView else {
-                print("TYPING_DEBUG: ❌ Coordinator.textDidChange - Not a valid NSTextView")
+            guard let textView = notification.object as? ColumnarNSTextView else { // Ensure it's our type
+                print("TYPING_DEBUG: ❌ Coordinator.textDidChange - Not a ColumnarNSTextView")
                 return
             }
             guard !isUpdating else {
@@ -880,43 +1064,8 @@ struct CustomTextView: NSViewRepresentable {
                 return false
             }
 
-            // New logic for multi-cursor input:
-            if !self.currentColumnSelections.isEmpty, let repString = replacementString {
-                // If there are column selections, and we have a replacement string
-                guard let textStorage = textView.textStorage else { return false }
-
-                textStorage.beginEditing()
-
-                var newSelections: [NSRange] = []
-                // Iterate in reverse order to ensure ranges remain valid after modifications
-                for rangeToReplace in self.currentColumnSelections.sorted(by: { $0.location > $1.location }) {
-                    let currentTextLength = textStorage.length
-                    // Ensure rangeToReplace.location is valid before using it.
-                    // It must be less than or equal to currentTextLength.
-                    // If location is currentTextLength, it's an append operation (valid for length 0).
-                    guard rangeToReplace.location <= currentTextLength else { continue }
-
-                    // Ensure the length of the range does not exceed the remaining text.
-                    let validLength = min(rangeToReplace.length, currentTextLength - rangeToReplace.location)
-                    let actualRangeToReplace = NSMakeRange(rangeToReplace.location, validLength)
-
-                    textStorage.replaceCharacters(in: actualRangeToReplace, with: repString)
-
-                    let newCaretLocation = actualRangeToReplace.location + (repString as NSString).length
-                    newSelections.append(NSMakeRange(newCaretLocation, 0))
-                }
-
-                self.currentColumnSelections = newSelections.sorted(by: { $0.location < $1.location })
-
-                textStorage.endEditing() // This should trigger textDidChange
-
-                // The textDidChange method in the coordinator will handle updating parent.text and parent.attributedText.
-                // It will also call updateFoldableRegions, updateBracketHighlighting, etc.
-
-                textView.needsDisplay = true // Ensure cursors/selections are redrawn
-
-                return false // We've handled the text change.
-            }
+            // Columnar input is now handled by ColumnarNSTextView.insertText.
+            // The old logic for `self.currentColumnSelections` is removed here.
             
             // Handle smart indentation for newlines
             if let replacement = replacementString, replacement == "\n" {
