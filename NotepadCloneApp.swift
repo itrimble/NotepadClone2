@@ -234,6 +234,113 @@ struct NotepadCloneApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .option])
             }
 
+            CommandMenu("Macros") {
+                // Toggle Recording Button
+                Button(appState.macroManager.isRecording ? "Stop Recording" : "Start Recording") {
+                    if appState.macroManager.isRecording {
+                        if let recordedMacro = appState.macroManager.stopRecording() {
+                            if recordedMacro.actions.isEmpty {
+                                print("Macro recorded with no actions. Not prompting to save.")
+                                return
+                            }
+
+                            let alert = NSAlert()
+                            alert.messageText = "Save Recorded Macro?"
+                            alert.informativeText = "Enter a name for this macro to save it. It recorded \(recordedMacro.actions.count) actions."
+
+                            let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+                            inputTextField.placeholderString = "Macro Name"
+                            alert.accessoryView = inputTextField
+
+                            alert.addButton(withTitle: "Save")
+                            alert.addButton(withTitle: "Don't Save")
+
+                            // Menu actions are typically on the main thread, but DispatchQueue.main.async is safer for UI updates.
+                            // However, runModal needs to be on the main thread and will block it, which is fine for alerts.
+                            // No need for DispatchQueue.main.async here if this whole action is already main thread.
+                            let response = alert.runModal()
+
+                            if response == .alertFirstButtonReturn { // "Save" button
+                                var macroName = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if macroName.isEmpty {
+                                    let dateFormatter = DateFormatter()
+                                    dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                                    macroName = "Macro \(dateFormatter.string(from: Date()))"
+                                }
+
+                                // Check for overwrite
+                                if appState.macroManager.getMacro(named: macroName) != nil {
+                                    let overwriteAlert = NSAlert()
+                                    overwriteAlert.messageText = "Overwrite Macro?"
+                                    overwriteAlert.informativeText = "A macro named '\(macroName)' already exists. Do you want to overwrite it?"
+                                    overwriteAlert.addButton(withTitle: "Overwrite")
+                                    overwriteAlert.addButton(withTitle: "Cancel")
+
+                                    if overwriteAlert.runModal() == .alertFirstButtonReturn { // Overwrite
+                                        appState.macroManager.saveNamedMacro(recordedMacro, name: macroName)
+                                    } else {
+                                        print("Macro save cancelled due to existing name.")
+                                    }
+                                } else {
+                                    appState.macroManager.saveNamedMacro(recordedMacro, name: macroName)
+                                }
+                            } else { // "Don't Save" or other close action
+                                print("Recorded macro was not saved by name.")
+                            }
+                        } else { // No actions recorded or stopRecording returned nil
+                             // MacroManager.stopRecording() was already called and handled empty actions by returning nil.
+                             // It also sets isRecording = false.
+                             print("Macro recording stopped. No actions recorded, or macro was nil.")
+                        }
+                    } else { // Not recording, so start:
+                        appState.macroManager.startRecording()
+                    }
+                }
+                .keyboardShortcut("R", modifiers: [.command, .shift]) // Cmd+Shift+R
+
+                // Playback Last Recorded Macro Button
+                Button("Playback Last Recorded Macro") {
+                    if let lastMacro = appState.macroManager.getLastRecordedMacro(),
+                       let currentTextView = NSApp.keyWindow?.firstResponder as? ColumnarNSTextView {
+                        appState.macroManager.playbackMacro(lastMacro, on: currentTextView)
+                    } else {
+                        print("No last macro to play or text view not focused.")
+                    }
+                }
+                .keyboardShortcut("P", modifiers: [.command, .shift]) // Cmd+Shift+P
+                // .disabled(appState.macroManager.getLastRecordedMacro() == nil)
+
+                Divider()
+
+                // Submenu for playing named macros
+                Menu("Play Named Macro") {
+                    // Check if there are any saved macros
+                    if appState.macroManager.recordedMacros.isEmpty {
+                        Text("No saved macros").disabled(true)
+                    } else {
+                        // Sort macro names for consistent menu order
+                        ForEach(appState.macroManager.recordedMacros.keys.sorted(), id: \.self) { macroName in
+                            Button(macroName) {
+                                if let macro = appState.macroManager.getMacro(named: macroName),
+                                   let currentTextView = NSApp.keyWindow?.firstResponder as? ColumnarNSTextView {
+                                    appState.macroManager.playbackMacro(macro, on: currentTextView)
+                                } else {
+                                    print("Could not play macro '\(macroName)' or text view not focused.")
+                                }
+                            }
+                        }
+                    }
+                }
+                // .disabled(appState.macroManager.recordedMacros.isEmpty)
+
+                Divider()
+
+                Button("Manage Macros...") {
+                    // Placeholder: This action will eventually open a macro management view.
+                    print("Manage Macros... clicked. (UI to be implemented)")
+                }
+            }
+
             // Navigate Menu (including Bookmarks)
             CommandMenu("Navigate") {
                 Menu("Bookmarks") {

@@ -168,6 +168,7 @@ class AppState: ObservableObject {
     // AI Settings & Manager
     @Published var aiSettings: AISettings! // Should be initialized before AIManager
     @Published var aiManager: AIManager!
+    @Published var macroManager: MacroManager // New MacroManager instance
 
     // Terminal Manager
     @Published var terminalManager = TerminalManager()
@@ -245,6 +246,7 @@ class AppState: ObservableObject {
         
         // Initialize AI Manager
         self.aiManager = AIManager(aiSettings: self.aiSettings)
+        self.macroManager = MacroManager() // Initialize MacroManager
 
         // Load saved theme
         self.appTheme = AppTheme.loadSavedTheme()

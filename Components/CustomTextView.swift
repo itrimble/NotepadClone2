@@ -6,6 +6,7 @@ import Combine // For auto-completion debouncing
 class ColumnarNSTextView: NSTextView {
     static let columnarTextPasteboardType = NSPasteboard.PasteboardType("com.example.NotepadClone2.columnarText")
     weak var columnCoordinator: CustomTextView.Coordinator?
+    weak var appState: AppState? // For accessing MacroManager
 
     // MARK: - Columnar Selection Properties
     // Note: isOptionKeyDown is now directly managed by ColumnarNSTextView through flagsChanged
@@ -188,8 +189,16 @@ class ColumnarNSTextView: NSTextView {
     }
 
     override func insertText(_ string: Any, replacementRange: NSRange) {
+        // Record action for macro
+        if let text = string as? String {
+            appState?.macroManager.recordAction(action: .insertText(text))
+        } else if let attributedString = string as? NSAttributedString {
+            appState?.macroManager.recordAction(action: .insertText(attributedString.string))
+        }
+
+        // Existing column mode typing logic (including virtual spaces)
         if isPerformingColumnSelection, let currentRanges = columnSelectedTextRanges, !currentRanges.isEmpty, let ts = self.textStorage {
-            guard let textToInsert = string as? String else {
+            guard let textToInsert = string as? String else { // Should have been handled by macro recording part too
                 super.insertText(string, replacementRange: replacementRange)
                 return
             }
@@ -198,46 +207,22 @@ class ColumnarNSTextView: NSTextView {
             var newCarets: [NSRange] = []
             let textNSString = ts.string as NSString
 
-            // Determine the target visual column for padding.
-            // This could be based on the columnSelectionAnchorCharacterIndex's line position,
-            // or the maximum desired starting column among selections.
-            // For simplicity, let's use the character index of each selection range's start
-            // as the desired minimum column for that line.
-
-            var accumulatedOffset = 0 // Tracks changes in length from previous insertions for current iteration
-
             for var currentRange in currentRanges.sorted(by: { $0.location > $1.location }) {
-                // Adjust currentRange based on previous changes in this loop iteration
-                // This is complex because sorted ranges are by original location.
-                // A better way is to apply changes and rebuild the ranges array, or adjust offsets carefully.
-                // For now, this simplified approach will have issues if textToInsert.count > 1 on multiple lines.
-                // Let's assume textToInsert is usually a single character for typing.
-
                 let lineRange = textNSString.lineRange(for: NSMakeRange(currentRange.location, 0))
                 let actualLineEndCharIndex = NSMaxRange(lineRange) - (textNSString.substring(with: lineRange).hasSuffix("\n") ? 1 : 0)
                                      - (textNSString.substring(with: lineRange).hasSuffix("\r\n") ? 1 : 0)
-
-
                 var spacesToInsert = ""
-                if currentRange.location > actualLineEndCharIndex { // Caret is beyond the actual characters on the line
+                if currentRange.location > actualLineEndCharIndex {
                     let paddingNeeded = currentRange.location - actualLineEndCharIndex
                     if paddingNeeded > 0 {
                         spacesToInsert = String(repeating: " ", count: paddingNeeded)
                     }
                 }
 
-                // The range where text/padding will actually be inserted/replaced.
-                // If padding is needed, it's at actualLineEndCharIndex. Otherwise, it's at currentRange.location.
                 let insertionPoint = spacesToInsert.isEmpty ? currentRange.location : actualLineEndCharIndex
                 let effectiveReplacementLength = spacesToInsert.isEmpty ? currentRange.length : 0
-                                                // If padding, we are inserting, not replacing existing selection part with spaces.
-                                                // Any selected text in the column beyond actual line end is "virtual".
-
                 let textToActuallyInsert = spacesToInsert + textToInsert
-
                 let currentRangeToReplace = NSMakeRange(insertionPoint, effectiveReplacementLength)
-
-                // Validate range before replacement
                 let validLocation = max(0, min(currentRangeToReplace.location, ts.length))
                 let validLength = max(0, min(currentRangeToReplace.length, ts.length - validLocation))
                 let finalRangeToReplace = NSMakeRange(validLocation, validLength)
@@ -248,12 +233,32 @@ class ColumnarNSTextView: NSTextView {
             ts.endEditing()
             self.columnSelectedTextRanges = newCarets.isEmpty ? nil : newCarets.sorted(by: { $0.location < $1.location })
             self.needsDisplay = true
-            // Let the textDidChange notification handle further updates.
-            // Do not call super.insertText if we handled it.
             return
         }
         super.insertText(string, replacementRange: replacementRange)
     }
+
+    override func deleteBackward(_ sender: Any?) {
+        appState?.macroManager.recordAction(action: .deleteBackward)
+        super.deleteBackward(sender)
+    }
+
+    override func deleteForward(_ sender: Any?) {
+        appState?.macroManager.recordAction(action: .deleteForward)
+        super.deleteForward(sender)
+    }
+
+    override func moveLeft(_ sender: Any?) {
+        appState?.macroManager.recordAction(action: .moveCursorBackward)
+        super.moveLeft(sender)
+    }
+
+    override func moveRight(_ sender: Any?) {
+        appState?.macroManager.recordAction(action: .moveCursorForward)
+        super.moveRight(sender)
+    }
+    // Note: Other move actions (moveUp, moveDown, moveWordLeft, etc.) would need similar overrides
+    // if they are to be recorded as distinct macro actions.
 
     override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn: Bool) {
         // If column selection is active, draw multiple carets for zero-length ranges
@@ -723,6 +728,7 @@ struct CustomTextView: NSViewRepresentable {
 
         // Create the custom text view instance
         let textView = ColumnarNSTextView(frame: .zero)
+        textView.appState = parent.appState // Pass AppState
         // Assign coordinator references
         textView.columnCoordinator = context.coordinator
         context.coordinator.textView = textView // For existing coordinator logic
@@ -842,9 +848,12 @@ struct CustomTextView: NSViewRepresentable {
     }
     
     func updateNSView(_ nsView: NSScrollView, context: Context) {
-        let textView = nsView.documentView as! NSTextView
+        guard let textView = nsView.documentView as? ColumnarNSTextView else { return }
+        // let textView = nsView.documentView as! NSTextView
         print("TYPING_DEBUG: 🔄 CustomTextView.updateNSView - Called, textView: \(textView)")
         
+        textView.appState = parent.appState // Ensure appState is updated
+
         // Always update theme when view updates
         context.coordinator.updateTheme(textView)
         
