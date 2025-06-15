@@ -219,13 +219,30 @@ class ColumnarNSTextView: NSTextView {
     }
 
     override func deleteBackward(_ sender: Any?) {
+        if MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack {
+            // If not in column mode, super.deleteBackward will trigger shouldChangeTextIn,
+            // but that doesn't explicitly know it's a "delete backward" action.
+            // So, we record it here if it's a simple delete backward.
+            // If column selections are active, this method handles it directly.
+            if columnCoordinator?.currentColumnSelections.isEmpty ?? true {
+                 columnCoordinator?.recordDeleteBackwardAction()
+            }
+        }
+
         guard let coordinator = self.columnCoordinator,
               !coordinator.currentColumnSelections.isEmpty,
               let textStorage = self.textStorage else {
+            // If not column mode, or no coordinator/textStorage, call super.
+            // If recording, shouldChangeTextIn will try to catch it,
+            // but it's better to have recorded the intent here if possible.
             super.deleteBackward(sender)
             return
         }
 
+        // Column mode delete backward logic
+        if MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack {
+             coordinator.recordDeleteBackwardAction() // Record once for the whole column operation
+        }
         textStorage.beginEditing()
         var newSelections: [NSRange] = []
         // Iterate in reverse order of location for deleteBackward
@@ -261,6 +278,12 @@ class ColumnarNSTextView: NSTextView {
     }
 
     override func deleteForward(_ sender: Any?) {
+        if MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack {
+            if columnCoordinator?.currentColumnSelections.isEmpty ?? true {
+                columnCoordinator?.recordDeleteForwardAction()
+            }
+        }
+
         guard let coordinator = self.columnCoordinator,
               !coordinator.currentColumnSelections.isEmpty,
               let textStorage = self.textStorage else {
@@ -268,6 +291,10 @@ class ColumnarNSTextView: NSTextView {
             return
         }
 
+        // Column mode delete forward logic
+        if MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack {
+            coordinator.recordDeleteForwardAction() // Record once for the whole column operation
+        }
         textStorage.beginEditing()
         var newSelections: [NSRange] = []
         for range in coordinator.currentColumnSelections.sorted(by: { $0.location > $1.location }) {
@@ -819,50 +846,59 @@ struct CustomTextView: NSViewRepresentable {
                 // If there are column selections, and we have a replacement string
                 guard let textStorage = textView.textStorage else { return false }
 
-                textStorage.beginEditing()
+                // Record this as a single "insertText" action for macros.
+                recordInsertTextAction(text: repString) // Call our recording helper
 
+                textStorage.beginEditing()
                 var newSelections: [NSRange] = []
                 // Iterate in reverse order to ensure ranges remain valid after modifications
                 for rangeToReplace in self.currentColumnSelections.sorted(by: { $0.location > $1.location }) {
                     let currentTextLength = textStorage.length
-                    // Ensure rangeToReplace.location is valid before using it.
-                    // It must be less than or equal to currentTextLength.
-                    // If location is currentTextLength, it's an append operation (valid for length 0).
                     guard rangeToReplace.location <= currentTextLength else { continue }
-
-                    // Ensure the length of the range does not exceed the remaining text.
                     let validLength = min(rangeToReplace.length, currentTextLength - rangeToReplace.location)
                     let actualRangeToReplace = NSMakeRange(rangeToReplace.location, validLength)
-
                     textStorage.replaceCharacters(in: actualRangeToReplace, with: repString)
-
                     let newCaretLocation = actualRangeToReplace.location + (repString as NSString).length
                     newSelections.append(NSMakeRange(newCaretLocation, 0))
                 }
-
                 self.currentColumnSelections = newSelections.sorted(by: { $0.location < $1.location })
-
-                textStorage.endEditing() // This should trigger textDidChange
-
-                // The textDidChange method in the coordinator will handle updating parent.text and parent.attributedText.
-                // It will also call updateFoldableRegions, updateBracketHighlighting, etc.
-
-                textView.needsDisplay = true // Ensure cursors/selections are redrawn
-
+                textStorage.endEditing()
+                textView.needsDisplay = true
                 return false // We've handled the text change.
             }
             
-            // Handle smart indentation for newlines
-            if let replacement = replacementString, replacement == "\n" {
-                // Use smart indenter to handle newline with proper indentation
-                let handled = SmartIndenter.handleNewlineIndentation(
-                    in: textView,
-                    language: parent.language
-                )
-                
-                if handled {
-                    return false // We handled the insertion ourselves
+            // Handle smart indentation for newlines and general text input recording
+            if let replacement = replacementString {
+                if replacement == "\n" {
+                    recordInsertTextAction(text: replacement) // Record newline
+                    let handled = SmartIndenter.handleNewlineIndentation(
+                        in: textView,
+                        language: parent.language
+                    )
+                    if handled {
+                        return false // We handled the insertion ourselves
+                    }
+                } else if !replacement.isEmpty {
+                    recordInsertTextAction(text: replacement) // Record general text input
+                } else { // replacement is empty, so this is a deletion
+                    if affectedCharRange.length > 0 { // Deleting a selection
+                        // This could be a Del key press or backspace on a selection.
+                        // ColumnarNSTextView's deleteBackward/Forward should catch specific key presses.
+                        // This handles cases like selecting text and typing a character (which first deletes).
+                        // Or selecting text and pressing delete.
+                        // We'll use deleteForward as a general "remove this range"
+                        recordDeleteForwardAction()
+                    }
+                    // If replacement is empty and length is 0, it's likely a no-op or handled elsewhere.
                 }
+            } else if affectedCharRange.length > 0 {
+                // replacementString is nil, but there's a range to be affected.
+                // This is typically a delete backward or forward action if not caught by specific handlers.
+                // For safety, we can try to infer. If replacementString is nil, it's often a programmatic change.
+                // Let's assume explicit delete methods (deleteBackward/Forward in ColumnarNSTextView)
+                // will call their respective record functions.
+                // If we reach here and it's a deletion, it's harder to tell intent without more context.
+                // For now, we rely on the explicit delete handlers.
             }
             
             print("TYPING_DEBUG:    ✅ Coordinator.shouldChangeTextIn - ALLOWING text change. Returning true.")
@@ -949,6 +985,27 @@ struct CustomTextView: NSViewRepresentable {
         func updateFoldableRegions(for text: String) {
             let folder = CodeFolder(language: parent.language)
             foldableRegions = folder.detectFoldableRegions(in: text)
+        }
+
+        // MARK: - Macro Recording Triggers
+        // These are called by ColumnarNSTextView or shouldChangeTextIn
+
+        func recordInsertTextAction(text: String) {
+            if MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack {
+                MacroManager.shared.recordAction(type: .insertText(text))
+            }
+        }
+
+        func recordDeleteBackwardAction() {
+            if MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack {
+                MacroManager.shared.recordAction(type: .deleteBackward)
+            }
+        }
+
+        func recordDeleteForwardAction() {
+            if MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack {
+                MacroManager.shared.recordAction(type: .deleteForward)
+            }
         }
         
         private func getCurrentDocument() -> Document? {
@@ -1060,55 +1117,109 @@ struct CustomTextView: NSViewRepresentable {
 =======
         // MARK: - Context Menu Customization
         func textView(_ textView: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
-            // It's usually better to augment the default menu rather than creating a new one from scratch.
-            // However, the exact method to get the "super" menu in this delegate context can be tricky.
-            // For this implementation, we'll add to the provided menu or create a new one if nil.
-            // A more robust approach might involve `textView.menu` directly if appropriate.
-
             let augmentedMenu = menu // Use the menu passed by the system.
-            var currentInsertIndex = 0
+            var currentInsertIndex = 0 // Start index for our custom items
 
-            // "Explain This Code" menu item
-            let explainMenuItem = NSMenuItem(
-                title: "Explain This Code",
-                action: #selector(explainSelectedCodeAction(_:)),
-                keyEquivalent: ""
-            )
-            explainMenuItem.target = self
-            explainMenuItem.representedObject = textView
-            explainMenuItem.isEnabled = textView.selectedRange().length > 0
+            // --- Standard Edit items separator (if any AI or Macro items are added) ---
+            var customItemsAdded = false
 
-            augmentedMenu.insertItem(explainMenuItem, at: currentInsertIndex)
-            currentInsertIndex += 1
+            // --- AI Features ---
+            if let _ = appState.aiManager.activeService { // Check if AI service is available
+                customItemsAdded = true
+                // "Explain This Code" menu item
+                let explainMenuItem = NSMenuItem(
+                    title: "Explain This Code",
+                    action: #selector(explainSelectedCodeAction(_:)),
+                    keyEquivalent: ""
+                )
+                explainMenuItem.target = self
+                explainMenuItem.representedObject = textView // Pass textView to action
+                explainMenuItem.isEnabled = textView.selectedRange().length > 0
+                augmentedMenu.insertItem(explainMenuItem, at: currentInsertIndex)
+                currentInsertIndex += 1
 
-            // "Generate Docstring" menu item
-            let docstringMenuItem = NSMenuItem(
-                title: "Generate Docstring",
-                action: #selector(generateDocstringAction(_:)),
-                keyEquivalent: ""
-            )
-            docstringMenuItem.target = self
-            docstringMenuItem.representedObject = textView
-            docstringMenuItem.isEnabled = textView.selectedRange().length > 0
-
-            augmentedMenu.insertItem(docstringMenuItem, at: currentInsertIndex)
-            currentInsertIndex += 1
-
-            // Add a separator before these custom items if menu is not empty,
-            // or ensure it's at a logical place if augmenting a standard menu.
-            if currentInsertIndex > 0 && !augmentedMenu.items.isEmpty && augmentedMenu.items.first?.isSeparatorItem == false {
-                 // Check if the very first item (after our insertions) is not a separator.
-                 // This logic might need adjustment based on where system items are.
-                 // A simpler approach: always add separator at index 0 IF we added items.
+                // "Generate Docstring" menu item
+                let docstringMenuItem = NSMenuItem(
+                    title: "Generate Docstring",
+                    action: #selector(generateDocstringAction(_:)),
+                    keyEquivalent: ""
+                )
+                docstringMenuItem.target = self
+                docstringMenuItem.representedObject = textView // Pass textView to action
+                docstringMenuItem.isEnabled = textView.selectedRange().length > 0
+                augmentedMenu.insertItem(docstringMenuItem, at: currentInsertIndex)
+                currentInsertIndex += 1
             }
-             augmentedMenu.insertItem(NSMenuItem.separator(), at: 0)
 
+            // --- Macro Features ---
+            customItemsAdded = true // Macros are always available
+            // Add a separator before macro items if AI items were added
+            if currentInsertIndex > 0 { // currentInsertIndex > 0 means AI items were added
+                augmentedMenu.insertItem(NSMenuItem.separator(), at: currentInsertIndex)
+                currentInsertIndex += 1
+            }
+
+            // "Start/Stop Recording Macro" menu item
+            let recordMacroMenuItemTitle = MacroManager.shared.isRecording ? "Stop Recording Macro" : "Start Recording Macro"
+            let recordMacroMenuItem = NSMenuItem(
+                title: recordMacroMenuItemTitle,
+                action: #selector(toggleMacroRecordingAction(_:)),
+                keyEquivalent: "r"
+            )
+            recordMacroMenuItem.keyEquivalentModifierMask = [.command, .option]
+            recordMacroMenuItem.target = self
+            recordMacroMenuItem.isEnabled = !MacroManager.shared.isPlayingBack // Disable while playing back
+            augmentedMenu.insertItem(recordMacroMenuItem, at: currentInsertIndex)
+            currentInsertIndex += 1
+
+            // "Playback Macro" menu item
+            let playbackMacroMenuItem = NSMenuItem(
+                title: "Playback Macro",
+                action: #selector(playbackMacroAction(_:)),
+                keyEquivalent: "p"
+            )
+            playbackMacroMenuItem.keyEquivalentModifierMask = [.command, .option]
+            playbackMacroMenuItem.target = self
+            playbackMacroMenuItem.representedObject = textView // Pass textView to action
+            // Enable only if not recording, not playing back, and actions exist
+            playbackMacroMenuItem.isEnabled = !MacroManager.shared.isRecording && !MacroManager.shared.isPlayingBack && !MacroManager.shared.recordedActions.isEmpty
+            augmentedMenu.insertItem(playbackMacroMenuItem, at: currentInsertIndex)
+            currentInsertIndex += 1
+
+            // Add a leading separator if we added any custom items and the menu isn't empty
+            // and there isn't already a separator at the beginning of our items.
+            if customItemsAdded && currentInsertIndex > 0 && augmentedMenu.items.count > currentInsertIndex {
+                 // If we added items, and there are items before what we just inserted,
+                 // check if a separator is needed.
+                 // This logic is a bit complex; simpler to ensure a separator at index 0 if customItemsAdded and menu not empty.
+            }
+            // Simplified: If we added any custom items, ensure there's a separator at the very top
+            // unless the menu was empty to begin with.
+            if customItemsAdded && !augmentedMenu.items.isEmpty && augmentedMenu.items.first?.isSeparatorItem == false {
+                 augmentedMenu.insertItem(NSMenuItem.separator(), at: 0)
+            }
 
             return augmentedMenu
         }
 
+        @objc func toggleMacroRecordingAction(_ sender: Any?) {
+            MacroManager.shared.toggleRecording()
+            // Menu will be rebuilt next time it's shown, reflecting the new state.
+        }
+
+        @objc func playbackMacroAction(_ sender: Any?) {
+            guard let menuItem = sender as? NSMenuItem,
+                  let textView = menuItem.representedObject as? NSTextView else {
+                print("Playback Macro: Error getting textView from sender.")
+                return
+            }
+            MacroManager.shared.playback(on: textView)
+        }
+
         @objc func explainSelectedCodeAction(_ sender: Any?) {
-            guard let textView = self.textView, textView.selectedRange().length > 0 else {
+            guard let menuItem = sender as? NSMenuItem, // Get textView from representedObject
+                  let textView = menuItem.representedObject as? NSTextView,
+                  textView.selectedRange().length > 0 else {
                 print("Explain Code: No text selected or textView not available.")
                 return
             }
@@ -1140,7 +1251,9 @@ struct CustomTextView: NSViewRepresentable {
         }
 
         @objc func generateDocstringAction(_ sender: Any?) {
-            guard let textView = self.textView, textView.selectedRange().length > 0 else {
+            guard let menuItem = sender as? NSMenuItem, // Get textView from representedObject
+                  let textView = menuItem.representedObject as? NSTextView,
+                  textView.selectedRange().length > 0 else {
                 print("Generate Docstring: No text selected or textView not available.")
                 return
             }
